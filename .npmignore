@@ -1,0 +1,12 @@
+# Source files (only ship compiled dist/)
+src/
+tsconfig.json
+tsconfig.esm.json
+
+# Development files
+node_modules/
+*.log
+.DS_Store
+
+# Spec and docs (optional - remove if you want to include)
+leash_sdk_spec.md
