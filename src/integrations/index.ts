@@ -18,4 +18,5 @@ export type {
   ConnectionStatus,
   GmailMessageList, GmailLabelList, GmailMessage, GmailLabel,
   DriveFile, DriveFileList,
+  CalendarListEntry, CalendarList, CalendarEvent, CalendarEventList,
 } from './types'

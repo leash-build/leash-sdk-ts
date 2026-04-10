@@ -1,5 +1,5 @@
 import { IntegrationError } from './types'
-import type { ConnectionStatus, GmailMessageList, GmailLabelList, DriveFile, DriveFileList } from './types'
+import type { ConnectionStatus, GmailMessageList, GmailLabelList, DriveFile, DriveFileList, CalendarList, CalendarEventList, CalendarEvent } from './types'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 
@@ -91,6 +91,43 @@ export class LeashIntegrations {
       /** Search files using a query string. */
       searchFiles: (query: string, maxResults?: number): Promise<DriveFileList> =>
         this.call('google_drive', 'search-files', { query, maxResults }),
+    }
+  }
+
+  /** Google Calendar integration */
+  get calendar() {
+    return {
+      /** List all calendars for the user. */
+      listCalendars: (): Promise<CalendarList> =>
+        this.call('google_calendar', 'list-calendars'),
+
+      /** List events from a calendar. */
+      listEvents: (params?: {
+        calendarId?: string
+        timeMin?: string
+        timeMax?: string
+        maxResults?: number
+        query?: string
+        singleEvents?: boolean
+        orderBy?: string
+      }): Promise<CalendarEventList> =>
+        this.call('google_calendar', 'list-events', params),
+
+      /** Create a new calendar event. */
+      createEvent: (params: {
+        calendarId?: string
+        summary: string
+        description?: string
+        location?: string
+        start: { dateTime?: string; date?: string; timeZone?: string }
+        end: { dateTime?: string; date?: string; timeZone?: string }
+        attendees?: { email: string }[]
+      }): Promise<CalendarEvent> =>
+        this.call('google_calendar', 'create-event', params),
+
+      /** Get a single event by ID. */
+      getEvent: (eventId: string, calendarId?: string): Promise<CalendarEvent> =>
+        this.call('google_calendar', 'get-event', { eventId, calendarId }),
     }
   }
 

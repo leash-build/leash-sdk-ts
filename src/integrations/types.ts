@@ -53,6 +53,40 @@ export interface DriveFileList {
   nextPageToken?: string
 }
 
+// Google Calendar types
+export interface CalendarListEntry {
+  id: string
+  summary: string
+  description?: string
+  timeZone?: string
+  primary?: boolean
+  backgroundColor?: string
+  foregroundColor?: string
+}
+
+export interface CalendarList {
+  calendars: CalendarListEntry[]
+}
+
+export interface CalendarEvent {
+  id: string
+  summary: string
+  description?: string
+  location?: string
+  start: { dateTime?: string; date?: string; timeZone?: string }
+  end: { dateTime?: string; date?: string; timeZone?: string }
+  attendees?: { email: string; responseStatus?: string }[]
+  status?: string
+  htmlLink?: string
+  created?: string
+  updated?: string
+}
+
+export interface CalendarEventList {
+  events: CalendarEvent[]
+  nextPageToken?: string
+}
+
 export class IntegrationError extends Error {
   public code?: string
   public connectUrl?: string

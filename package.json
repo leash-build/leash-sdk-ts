@@ -1,6 +1,6 @@
 {
   "name": "@leash/sdk",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "TypeScript SDK for Leash platform - authentication and environment management",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
