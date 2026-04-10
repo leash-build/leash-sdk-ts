@@ -7,15 +7,19 @@ interface IntegrationsConfig {
   platformUrl?: string
   /** For server-side usage: pass the auth token directly */
   authToken?: string
+  /** API key for app identification (X-API-Key header) */
+  apiKey?: string
 }
 
 export class LeashIntegrations {
   private platformUrl: string
   private authToken?: string
+  private apiKey?: string
 
   constructor(config?: IntegrationsConfig) {
     this.platformUrl = config?.platformUrl || process.env.LEASH_PLATFORM_URL || DEFAULT_PLATFORM_URL
     this.authToken = config?.authToken
+    this.apiKey = config?.apiKey
   }
 
   /** Gmail integration */
@@ -141,6 +145,10 @@ export class LeashIntegrations {
       headers['Authorization'] = `Bearer ${this.authToken}`
     }
 
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey
+    }
+
     const res = await fetch(
       `${this.platformUrl}/api/integrations/${provider}/${action}`,
       {
@@ -176,6 +184,9 @@ export class LeashIntegrations {
     const headers: Record<string, string> = {}
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`
+    }
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey
     }
 
     const res = await fetch(`${this.platformUrl}/api/integrations/connections`, {
