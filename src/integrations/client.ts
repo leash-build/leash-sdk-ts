@@ -20,6 +20,11 @@ export class LeashIntegrations {
     this.platformUrl = config?.platformUrl || process.env.LEASH_PLATFORM_URL || DEFAULT_PLATFORM_URL
     this.authToken = config?.authToken
     this.apiKey = config?.apiKey
+
+    // Require API key in server-side (non-browser) contexts
+    if (!this.apiKey && typeof window === 'undefined') {
+      throw new Error('API key required. Create one with `leash keys create <app-name>` or in your app settings at leash.build')
+    }
   }
 
   /** Gmail integration */
