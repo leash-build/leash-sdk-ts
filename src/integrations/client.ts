@@ -15,6 +15,7 @@ export class LeashIntegrations {
   private platformUrl: string
   private authToken?: string
   private apiKey?: string
+  private _envCache?: Record<string, string>
 
   constructor(config?: IntegrationsConfig) {
     this.platformUrl = config?.platformUrl || process.env.LEASH_PLATFORM_URL || DEFAULT_PLATFORM_URL
@@ -170,6 +171,61 @@ export class LeashIntegrations {
         return data.data
       }
     }
+  }
+
+  /**
+   * Call any MCP server tool directly — no pre-registration needed.
+   * The platform spawns the MCP server process and executes the tool.
+   *
+   * @param npmPackage - The npm package name of the MCP server (e.g., '@modelcontextprotocol/server-notion')
+   * @param tool - The tool name to call
+   * @param args - Optional arguments to pass to the tool
+   */
+  async mcp(npmPackage: string, tool: string, args?: Record<string, any>): Promise<any> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`
+    if (this.apiKey) headers['X-API-Key'] = this.apiKey
+
+    const res = await fetch(`${this.platformUrl}/api/mcp/run`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ package: npmPackage, tool, args: args ?? {} }),
+    })
+
+    const data = await res.json()
+    if (!data.success) throw new IntegrationError(data)
+    return data.data
+  }
+
+  /**
+   * Fetch environment variables for this app from the platform.
+   * Results are cached for the lifetime of this client instance.
+   *
+   * @param key - Optional specific key to fetch. If omitted, returns all env vars.
+   */
+  async getEnv(): Promise<Record<string, string>>
+  async getEnv(key: string): Promise<string | null>
+  async getEnv(key?: string): Promise<Record<string, string> | string | null> {
+    if (!this._envCache) {
+      const headers: Record<string, string> = {}
+      if (this.apiKey) headers['X-API-Key'] = this.apiKey
+      if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`
+
+      const res = await fetch(`${this.platformUrl}/api/apps/env`, {
+        headers,
+        credentials: 'include',
+      })
+
+      const data = await res.json()
+      if (!data.success) throw new IntegrationError(data)
+      this._envCache = data.data as Record<string, string>
+    }
+
+    if (key) return this._envCache[key] ?? null
+    return this._envCache
   }
 
   /** Generic proxy call for any provider action */
