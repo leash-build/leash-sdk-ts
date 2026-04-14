@@ -135,6 +135,43 @@ export class LeashIntegrations {
     }
   }
 
+  /** Access a custom integration by name. Returns an untyped client. */
+  integration(name: string) {
+    return {
+      call: async (path: string, options?: { method?: string; body?: any; headers?: Record<string, string> }) => {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        }
+
+        if (this.authToken) {
+          headers['Authorization'] = `Bearer ${this.authToken}`
+        }
+
+        if (this.apiKey) {
+          headers['X-API-Key'] = this.apiKey
+        }
+
+        const res = await fetch(
+          `${this.platformUrl}/api/integrations/custom/${encodeURIComponent(name)}`,
+          {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify({ path, ...options }),
+          }
+        )
+
+        const data = await res.json()
+
+        if (!data.success) {
+          throw new IntegrationError(data)
+        }
+
+        return data.data
+      }
+    }
+  }
+
   /** Generic proxy call for any provider action */
   async call(provider: string, action: string, body?: any): Promise<any> {
     const headers: Record<string, string> = {
