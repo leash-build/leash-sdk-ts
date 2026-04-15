@@ -1,302 +1,146 @@
 # Leash SDK
 
-TypeScript SDK for building apps on the Leash platform. Provides seamless authentication and environment variable management for Next.js applications.
+TypeScript SDK for the Leash platform.
 
-## Features
+This package currently covers two areas:
 
-- **Client-side hooks**: `useLeashAuth` and `useLeashEnv` for React components
-- **Server-side utilities**: `getLeashUser` for API routes and server components
-- **Middleware**: Automatic route protection with `leashMiddleware`
-- **TypeScript support**: Full type definitions included
-- **Next.js App Router**: Built for Next.js 13+ with App Router
+- app auth and environment helpers for Next.js apps
+- integration and MCP clients for calling Leash-hosted provider actions
 
-## Installation
+## Install
 
 ```bash
 npm install @leash/sdk
 ```
 
+## Main Exports
+
+### App auth and env helpers
+
+- `LeashProvider`
+- `useLeashAuth()`
+- `useLeashEnv()`
+- `getLeashUser(req)`
+- `isAuthenticated(req)`
+- `leashMiddleware(...)`
+
+### Integrations client
+
+- `LeashIntegrations`
+- `getIntegrations(req)`
+- `getLeashMcpConfig(...)`
+- `getLeashMcpUrl(...)`
+
 ## Quick Start
 
-### 1. Wrap your app with LeashProvider
+### Client auth
 
-```typescript
-// app/layout.tsx
-import { LeashProvider } from '@leash/sdk'
+```tsx
+import { LeashProvider, useLeashAuth } from '@leash/sdk'
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html>
       <body>
-        <LeashProvider>
-          {children}
-        </LeashProvider>
+        <LeashProvider>{children}</LeashProvider>
       </body>
     </html>
   )
 }
-```
 
-### 2. Use authentication in components
-
-```typescript
-// app/page.tsx
-'use client'
-
-import { useLeashAuth } from '@leash/sdk'
-
-export default function Home() {
+export function Profile() {
   const { user, isLoading, error } = useLeashAuth()
 
   if (isLoading) return <div>Loading...</div>
-  if (error) return <div>Error: {error.message}</div>
+  if (error) return <div>{error.message}</div>
   if (!user) return <div>Not authenticated</div>
 
-  return <div>Welcome {user.name}!</div>
+  return <div>{user.name}</div>
 }
 ```
 
-### 3. Access environment variables
+### Environment access
 
-```typescript
-'use client'
-
+```tsx
 import { useLeashEnv } from '@leash/sdk'
 
-export default function Settings() {
+export function Settings() {
   const env = useLeashEnv()
-
-  return (
-    <div>
-      <p>App ID: {env.LEASH_APP_ID}</p>
-      <p>Supabase URL: {env.SUPABASE_URL}</p>
-    </div>
-  )
+  return <div>{env.LEASH_APP_ID}</div>
 }
 ```
 
-### 4. Protect API routes
+### Server auth
 
-```typescript
-// app/api/profile/route.ts
-import { getLeashUser } from '@leash/sdk/server'
-import { NextRequest, NextResponse } from 'next/server'
-
-export async function GET(req: NextRequest) {
-  try {
-    const user = getLeashUser(req)
-    return NextResponse.json({ user })
-  } catch (error) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-}
-```
-
-### 5. Add middleware for route protection
-
-```typescript
-// middleware.ts
-import { leashMiddleware } from '@leash/sdk/server'
-
-export const middleware = leashMiddleware({
-  publicRoutes: ['/login', '/about'],
-  redirectTo: '/login'
-})
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
-}
-```
-
-## API Reference
-
-### Client-Side
-
-#### `useLeashAuth()`
-
-Hook that returns authenticated user context.
-
-**Returns:**
-```typescript
-{
-  user: LeashUser | null
-  isLoading: boolean
-  error: Error | null
-}
-```
-
-**LeashUser Type:**
-```typescript
-{
-  id: string
-  email: string
-  name: string
-  picture?: string
-}
-```
-
-#### `useLeashEnv()`
-
-Hook that returns Leash environment variables.
-
-**Returns:**
-```typescript
-{
-  LEASH_USER_ID: string
-  LEASH_USER_EMAIL: string
-  LEASH_APP_ID: string
-  SUPABASE_URL: string
-  SUPABASE_KEY: string
-  [key: string]: string | undefined // Custom vars
-}
-```
-
-#### `<LeashProvider>`
-
-React context provider that manages authentication state.
-
-**Props:**
-- `children: React.ReactNode`
-
-### Server-Side
-
-#### `getLeashUser(req: NextRequest)`
-
-Extracts and validates the authenticated user from a Next.js request.
-
-**Parameters:**
-- `req: NextRequest` - Next.js request object
-
-**Returns:** `LeashUser`
-
-**Throws:** `Error` if not authenticated or token is invalid
-
-#### `isAuthenticated(req: NextRequest)`
-
-Checks if a request has valid Leash authentication.
-
-**Returns:** `boolean`
-
-#### `leashMiddleware(options?)`
-
-Creates Next.js middleware for route protection.
-
-**Options:**
-```typescript
-{
-  publicRoutes?: string[]  // Routes accessible without auth
-  redirectTo?: string      // Where to redirect unauthenticated users
-}
-```
-
-**Returns:** Next.js middleware function
-
-## Environment Variables
-
-### Required (Server-Side)
-
-- `LEASH_JWT_SECRET` - Secret for JWT verification (provided by Leash platform)
-
-### Auto-Injected by Leash Platform
-
-- `LEASH_USER_ID` - Current user's ID
-- `LEASH_USER_EMAIL` - Current user's email
-- `LEASH_APP_ID` - Your app's ID
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_KEY` - Supabase anon key
-
-## Complete Example
-
-```typescript
-// app/layout.tsx
-import { LeashProvider } from '@leash/sdk'
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <LeashProvider>
-          {children}
-        </LeashProvider>
-      </body>
-    </html>
-  )
-}
-
-// app/page.tsx
-'use client'
-
-import { useLeashAuth, useLeashEnv } from '@leash/sdk'
-
-export default function Home() {
-  const { user, isLoading } = useLeashAuth()
-  const env = useLeashEnv()
-
-  if (isLoading) return <div>Loading...</div>
-
-  return (
-    <div>
-      <h1>Welcome {user?.name}</h1>
-      <p>Your app is: {env.LEASH_APP_ID}</p>
-      <p>Supabase URL: {env.SUPABASE_URL}</p>
-    </div>
-  )
-}
-
-// app/api/data/route.ts
+```ts
 import { getLeashUser } from '@leash/sdk/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
   const user = getLeashUser(req)
-  return NextResponse.json({
-    message: `Data for ${user.email}`,
-    userId: user.id
-  })
+  return NextResponse.json({ user })
 }
+```
 
-// middleware.ts
-import { leashMiddleware } from '@leash/sdk/server'
+### Integrations
 
-export const middleware = leashMiddleware({
-  publicRoutes: ['/login', '/about'],
-  redirectTo: '/login'
+```ts
+import { LeashIntegrations } from '@leash/sdk/integrations'
+
+const integrations = new LeashIntegrations({
+  authToken: 'your-platform-jwt',
+  apiKey: process.env.LEASH_API_KEY,
 })
 
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
-}
+const messages = await integrations.gmail.listMessages({ maxResults: 5 })
+const env = await integrations.getEnv()
 ```
 
-## TypeScript Support
+## Authentication Notes
 
-The SDK is written in TypeScript and includes full type definitions. All types are exported from the main package:
+The platform user token shape uses the current Leash JWT payload, including `userId`.
 
-```typescript
-import type {
-  LeashUser,
-  LeashEnv,
-  LeashAuthContext,
-  LeashMiddlewareOptions
-} from '@leash/sdk'
-```
+This SDK supports the current payload and remains backward-compatible with older `sub`-based payloads where needed.
 
-## Development
+Server helpers expect:
+
+- the `leash-auth` cookie for browser/session auth
+- `LEASH_JWT_SECRET` for verification when verification is enabled
+
+## Environment Variables
+
+### Server-side
+
+- `LEASH_JWT_SECRET`
+
+### Common runtime values exposed by the platform
+
+- `LEASH_USER_ID`
+- `LEASH_USER_EMAIL`
+- `LEASH_APP_ID`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+
+## Testing
+
+Run the local SDK suite with:
 
 ```bash
-# Install dependencies
-npm install
+npm test
+```
 
-# Build the SDK
+This suite covers:
+
+- auth payload compatibility
+- integration request construction
+- env fetch and cache behavior
+
+## Build
+
+```bash
 npm run build
-
-# Watch mode for development
-npm run dev
-
-# Clean build artifacts
-npm run clean
 ```
 
 ## License
 
-MIT
+Apache-2.0
