@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { LeashContext } from './leashContext'
 import { LEASH_AUTH_COOKIE } from '../../constants'
 import type { LeashUser, LeashJWTPayload } from '../../types'
+import { payloadToUser } from '../../auth/payload'
 
 interface LeashProviderProps {
   children: React.ReactNode
@@ -42,16 +43,6 @@ function getCookie(name: string): string | null {
   }
 
   return null
-}
-
-// Helper function to convert JWT payload to user object
-function payloadToUser(payload: LeashJWTPayload): LeashUser {
-  return {
-    id: payload.sub,
-    email: payload.email,
-    name: payload.name,
-    picture: payload.picture,
-  }
 }
 
 export function LeashProvider({ children }: LeashProviderProps) {

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { LEASH_AUTH_COOKIE } from '../constants'
 import type { LeashUser, LeashJWTPayload } from '../types'
+import { payloadToUser } from '../auth/payload'
 
 /**
  * Extract and validate Leash user from Next.js request
@@ -50,12 +51,7 @@ export function getLeashUser(req: NextRequest): LeashUser {
     const payload = jwt.verify(token, secret) as LeashJWTPayload
 
     // Convert payload to user object
-    return {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-    }
+    return payloadToUser(payload)
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       throw new Error('Not authenticated: Invalid token')
@@ -84,12 +80,7 @@ function decodeTokenWithoutVerification(token: string): LeashUser {
       throw new Error('Token expired')
     }
 
-    return {
-      id: decoded.sub,
-      email: decoded.email,
-      name: decoded.name,
-      picture: decoded.picture,
-    }
+    return payloadToUser(decoded)
   } catch (error) {
     throw new Error('Not authenticated: Invalid token format')
   }

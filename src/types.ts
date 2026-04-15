@@ -31,9 +31,11 @@ export interface LeashMiddlewareOptions {
 
 // JWT payload structure from Leash platform
 export interface LeashJWTPayload {
-  sub: string // user ID
+  userId?: string
+  sub?: string
   email: string
   name: string
+  username?: string
   picture?: string
   iat: number
   exp: number
