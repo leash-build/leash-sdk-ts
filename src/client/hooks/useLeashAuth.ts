@@ -1,8 +1,8 @@
 'use client'
 
 import { useContext } from 'react'
-import { LeashContext } from '../context/leashContext'
-import type { LeashAuthContext } from '../../types'
+import { LeashContext } from '../context/leashContext.js'
+import type { LeashAuthContext } from '../../types.js'
 
 /**
  * Hook to access Leash authentication context

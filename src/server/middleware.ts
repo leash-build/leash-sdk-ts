@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isAuthenticated } from './auth'
-import { DEFAULT_REDIRECT_PATH } from '../constants'
-import type { LeashMiddlewareOptions } from '../types'
+import { isAuthenticated } from './auth.js'
+import { DEFAULT_REDIRECT_PATH } from '../constants.js'
+import type { LeashMiddlewareOptions } from '../types.js'
 
 /**
  * Create Leash authentication middleware for Next.js

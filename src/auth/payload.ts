@@ -1,4 +1,4 @@
-import type { LeashUser, LeashJWTPayload } from '../types'
+import type { LeashUser, LeashJWTPayload } from '../types.js'
 
 export function getLeashUserId(payload: LeashJWTPayload): string | null {
   return payload.userId || payload.sub || null

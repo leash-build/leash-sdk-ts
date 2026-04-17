@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { LeashContext } from './leashContext'
-import { LEASH_AUTH_COOKIE } from '../../constants'
-import type { LeashUser, LeashJWTPayload } from '../../types'
-import { payloadToUser } from '../../auth/payload'
+import { LeashContext } from './leashContext.js'
+import { LEASH_AUTH_COOKIE } from '../../constants.js'
+import type { LeashUser, LeashJWTPayload } from '../../types.js'
+import { payloadToUser } from '../../auth/payload.js'
 
 interface LeashProviderProps {
   children: React.ReactNode

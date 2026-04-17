@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
-import { LEASH_AUTH_COOKIE } from '../constants'
-import type { LeashUser, LeashJWTPayload } from '../types'
-import { payloadToUser } from '../auth/payload'
+import { LEASH_AUTH_COOKIE } from '../constants.js'
+import type { LeashUser, LeashJWTPayload } from '../types.js'
+import { payloadToUser } from '../auth/payload.js'
 
 /**
  * Extract and validate Leash user from Next.js request

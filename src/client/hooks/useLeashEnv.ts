@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LEASH_ENV_KEYS } from '../../constants'
-import type { LeashEnv } from '../../types'
+import { LEASH_ENV_KEYS } from '../../constants.js'
+import type { LeashEnv } from '../../types.js'
 
 /**
  * Hook to access Leash environment variables

@@ -1,5 +1,5 @@
-import { IntegrationError } from './types'
-import type { ConnectionStatus, GmailMessageList, GmailLabelList, DriveFile, DriveFileList, CalendarList, CalendarEventList, CalendarEvent } from './types'
+import { IntegrationError } from './types.js'
+import type { ConnectionStatus, GmailMessageList, GmailLabelList, DriveFile, DriveFileList, CalendarList, CalendarEventList, CalendarEvent } from './types.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 

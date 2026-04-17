@@ -1,5 +1,5 @@
-import { LeashIntegrations } from './client'
-import { LEASH_AUTH_COOKIE } from '../constants'
+import { LeashIntegrations } from './client.js'
+import { LEASH_AUTH_COOKIE } from '../constants.js'
 
 /**
  * Create a LeashIntegrations instance from a Next.js request.

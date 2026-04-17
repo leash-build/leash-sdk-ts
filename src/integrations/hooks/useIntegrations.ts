@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LeashIntegrations } from '../client'
+import { LeashIntegrations } from '../client.js'
 
 /**
  * React hook that returns a LeashIntegrations client instance.

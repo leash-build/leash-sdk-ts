@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { ConnectionStatus } from '../types'
-import { LeashIntegrations } from '../client'
+import type { ConnectionStatus } from '../types.js'
+import { LeashIntegrations } from '../client.js'
 
 interface UseIntegrationStatusResult {
   connections: ConnectionStatus[]

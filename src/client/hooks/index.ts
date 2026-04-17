@@ -1,2 +1,2 @@
-export { useLeashAuth } from './useLeashAuth'
-export { useLeashEnv } from './useLeashEnv'
+export { useLeashAuth } from './useLeashAuth.js'
+export { useLeashEnv } from './useLeashEnv.js'
