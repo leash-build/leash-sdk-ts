@@ -1,61 +1,51 @@
-# Leash SDK - Build Specification
+# Leash SDK — Specification
 
 ## Overview
-The Leash SDK is a TypeScript library that provides developers with seamless authentication and environment variable management for apps deployed on the Leash platform.
+
+The Leash SDK is a TypeScript library that provides authentication, environment variable access, and integrations for apps deployed on the Leash platform. It works with any JavaScript/TypeScript framework — not just Next.js.
+
+## Entry Points
+
+| Path | Purpose | Dependencies |
+|------|---------|-------------|
+| `@leash/sdk` | React hooks and context (useLeashAuth, useLeashEnv, LeashProvider) | React 18+ |
+| `@leash/sdk/server` | Framework-agnostic server auth (getLeashUser, isAuthenticated) | None |
+| `@leash/sdk/middleware` | Next.js route protection (leashMiddleware) | Next.js |
+| `@leash/sdk/integrations` | API client for Leash-hosted provider actions | None |
+| `@leash/sdk/integrations/react` | React hooks for integrations | React 18+ |
+| `@leash/sdk/integrations/mcp` | MCP server config helpers | None |
+
+React and Next.js are optional peer dependencies. Server and integrations work without them.
 
 ## Core Features
 
 ### 1. Authentication (`useLeashAuth`)
-- Hook that returns authenticated user context
+- React hook that returns authenticated user context
 - User data includes: `id`, `email`, `name`, `picture`
-- Works client-side and server-side
-- No additional OAuth setup needed
+- Client-side only (use in components with `'use client'`)
 
 ### 2. Environment Variables (`useLeashEnv`)
 - Access Leash-provided environment variables
 - Auto-injected vars: `LEASH_USER_ID`, `LEASH_USER_EMAIL`, `LEASH_APP_ID`, `SUPABASE_URL`, `SUPABASE_KEY`
 - Custom vars set through Leash dashboard
 
-### 3. Server-Side Middleware
-- Validate Leash auth cookies
-- Protect API routes
-- Extract user context
+### 3. Server Auth (`getLeashUser`)
+- Extract and validate user from any HTTP request
+- Works with Express, Koa, Hono, Fastify, Next.js, plain Node.js
+- Reads `leash-auth` cookie from headers — no framework dependency
 
-## Target Framework
-- **Next.js** (App Router)
-- TypeScript
-- React 18+
+### 4. Next.js Middleware (`leashMiddleware`)
+- Protect Next.js routes from unauthenticated access
+- Requires Next.js (separate entry point to avoid contaminating non-Next.js apps)
 
-## Package Structure
-
-```
-@leash/sdk/
-├── src/
-│   ├── client/
-│   │   ├── hooks/
-│   │   │   ├── useLeashAuth.ts
-│   │   │   ├── useLeashEnv.ts
-│   │   │   └── index.ts
-│   │   ├── context/
-│   │   │   ├── LeashProvider.tsx
-│   │   │   └── leashContext.ts
-│   │   └── index.ts
-│   ├── server/
-│   │   ├── middleware.ts
-│   │   ├── auth.ts
-│   │   └── index.ts
-│   ├── types.ts
-│   ├── constants.ts
-│   └── index.ts
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+### 5. Integrations Client (`LeashIntegrations`)
+- Call Leash-hosted provider actions (Gmail, Calendar, Drive, BigQuery, etc.)
+- Works server-side with API key auth or browser-side with cookie auth
+- No React dependency
 
 ## Type Definitions
 
 ```typescript
-// User type
 interface LeashUser {
   id: string
   email: string
@@ -63,7 +53,6 @@ interface LeashUser {
   picture?: string
 }
 
-// Environment type
 interface LeashEnv {
   [key: string]: string | undefined
   LEASH_USER_ID: string
@@ -73,316 +62,161 @@ interface LeashEnv {
   SUPABASE_KEY: string
 }
 
-// Auth context type
 interface LeashAuthContext {
   user: LeashUser | null
   isLoading: boolean
   error: Error | null
 }
 
-// Middleware options
 interface LeashMiddlewareOptions {
   publicRoutes?: string[]
   redirectTo?: string
 }
 ```
 
-## Implementation Details
+## Package Structure
 
-### Client-Side: useLeashAuth Hook
-
-**Behavior:**
-- Reads Leash auth cookie from browser
-- Decodes and validates JWT
-- Returns user object or null if not authenticated
-- Handles loading state during initial check
-- Client-side only (use in components)
-
-**Usage:**
-```typescript
-import { useLeashAuth } from '@leash/sdk'
-
-export default function Page() {
-  const { user, isLoading, error } = useLeashAuth()
-  
-  if (isLoading) return <div>Loading...</div>
-  if (error) return <div>Error: {error.message}</div>
-  if (!user) return <div>Not authenticated</div>
-  
-  return <div>Hello {user.name}</div>
-}
+```
+@leash/sdk/
+├── src/
+│   ├── client/                    # React hooks and context
+│   │   ├── hooks/
+│   │   │   ├── useLeashAuth.ts
+│   │   │   ├── useLeashEnv.ts
+│   │   │   └── index.ts
+│   │   ├── context/
+│   │   │   ├── LeashProvider.tsx
+│   │   │   └── leashContext.ts
+│   │   └── index.ts
+│   ├── server/                    # Framework-agnostic server auth
+│   │   ├── auth.ts                # getLeashUser() — works with any request
+│   │   ├── middleware.ts          # leashMiddleware() — Next.js only
+│   │   └── index.ts              # exports auth only (not middleware)
+│   ├── integrations/              # Integrations client
+│   │   ├── client.ts             # LeashIntegrations class
+│   │   ├── server.ts             # getIntegrations() helper
+│   │   ├── mcp.ts                # MCP config helpers
+│   │   ├── hooks/                # React hooks (separate from barrel)
+│   │   │   ├── useIntegrations.ts
+│   │   │   └── useIntegrationStatus.ts
+│   │   ├── react.ts              # React hook exports (opt-in)
+│   │   ├── types.ts
+│   │   └── index.ts              # No React imports
+│   ├── auth/
+│   │   └── payload.ts            # JWT payload parsing
+│   ├── types.ts
+│   ├── constants.ts
+│   └── index.ts                  # React exports only
+├── dist/
+└── package.json
 ```
 
-**Implementation Notes:**
-- Cookie name: `leash-auth` (look for this in document.cookie)
-- JWT payload structure: `{ sub, email, name, picture, iat, exp }`
-- Use `useEffect` to read cookie on mount
-- Handle SSR: check if window is defined
-- Cache user state to avoid re-fetching on every render
+## Server Auth — How It Works
 
-### Client-Side: useLeashEnv Hook
+`getLeashUser(req)` extracts the `leash-auth` cookie from any HTTP request:
 
-**Behavior:**
-- Returns environment variables injected by Leash
-- Includes auto-vars (LEASH_USER_ID, SUPABASE_URL, etc.)
-- Includes custom vars set in Leash dashboard
-- Static at runtime (no changes after app loads)
+1. Checks `req.cookies.get(name)` (Next.js / Web Request)
+2. Checks `req.cookies[name]` (Express with cookie-parser)
+3. Falls back to parsing `req.headers.cookie` (raw header — works everywhere)
+4. Decodes/verifies the JWT
+5. Returns a `LeashUser` object or throws
 
-**Usage:**
-```typescript
-import { useLeashEnv } from '@leash/sdk'
+No `NextRequest` import, no framework dependency.
 
-export default function Page() {
-  const env = useLeashEnv()
-  
-  return (
-    <div>
-      <p>App ID: {env.LEASH_APP_ID}</p>
-      <p>Supabase URL: {env.SUPABASE_URL}</p>
-      <p>Custom API Key: {env.API_KEY}</p>
-    </div>
-  )
-}
-```
+## Usage Examples
 
-**Implementation Notes:**
-- Read from `window.__LEASH_ENV__` (injected by Leash platform into HTML)
-- Falls back to `process.env` for development/non-Leash environments
-- Return type: `LeashEnv` (with all standard keys)
-- Throw or warn if running outside Leash and vars not set
+### Express
 
-### LeashProvider Context
-
-**Behavior:**
-- Wraps app to provide auth context globally
-- Optionally handles redirect on auth failure
-- Provides loading/error states
-
-**Usage:**
-```typescript
-// app.tsx or _app.tsx
-import { LeashProvider } from '@leash/sdk'
-
-export default function RootLayout({ children }) {
-  return (
-    <LeashProvider>
-      {children}
-    </LeashProvider>
-  )
-}
-
-// Later in any component
-import { useLeashAuth } from '@leash/sdk'
-
-export default function Component() {
-  const { user } = useLeashAuth()
-  return <div>{user?.name}</div>
-}
-```
-
-**Implementation Notes:**
-- Create React Context for LeashAuthContext
-- Provider fetches user once on mount
-- Memoize user object to prevent unnecessary re-renders
-- Handle hydration mismatch (SSR safe)
-
-### Server-Side: getLeashUser
-
-**Behavior:**
-- Extract user from request cookies (Next.js API route)
-- Validate JWT signature
-- Return user or throw error
-- Use in `getServerSideProps` or API routes
-
-**Usage:**
-```typescript
-// app/api/profile/route.ts
+```js
+import express from 'express'
 import { getLeashUser } from '@leash/sdk/server'
-import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(req: NextRequest) {
+const app = express()
+
+app.get('/me', (req, res) => {
   try {
     const user = getLeashUser(req)
-    return NextResponse.json({ user })
-  } catch (error) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    res.json({ user })
+  } catch {
+    res.status(401).json({ error: 'Not authenticated' })
   }
-}
-```
-
-**Implementation Notes:**
-- Extract cookie from `req.cookies.get('leash-auth')`
-- Verify JWT using Leash public key (hardcoded or fetched)
-- For MVP, use simple JWT verification (HS256 with shared secret)
-- Throw error if cookie missing or invalid
-- Return decoded user object
-
-### Server-Side: Middleware
-
-**Behavior:**
-- Protect routes from unauthenticated access
-- Validate Leash auth on every request
-- Redirect to login if unauthorized
-- Allow public routes
-
-**Usage:**
-```typescript
-// middleware.ts
-import { leashMiddleware } from '@leash/sdk/server'
-
-export const middleware = leashMiddleware({
-  publicRoutes: ['/login', '/about'],
-  redirectTo: '/login'
 })
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
-}
 ```
 
-**Implementation Notes:**
-- Use Next.js middleware pattern
-- Check `leash-auth` cookie on each request
-- If missing and route not public: redirect
-- If present but invalid: redirect to redirectTo
-- Pass user to request headers for downstream use
+### Next.js API Route
 
-## Development Workflow
-
-### Setup
-1. Create new directory: `packages/sdk`
-2. Initialize: `npm init -y`
-3. Install deps: `npm install typescript react next @types/react @types/node`
-4. Create `tsconfig.json`
-5. Create `src/` directory structure
-
-### Build
-- Compile TypeScript to JavaScript
-- Output to `dist/`
-- Generate `.d.ts` files
-- Package as CommonJS and ESM
-
-### Testing (Phase 2)
-- Unit tests for hooks
-- Integration tests with Next.js app
-- Mock Leash platform
-
-## Key Implementation Decisions
-
-### JWT Validation
-- For MVP: Use simple HS256 signature verification
-- Secret: `process.env.LEASH_JWT_SECRET`
-- Later: Fetch public key from Leash platform
-
-### Cookie Format
-- Name: `leash-auth`
-- Format: JWT string
-- HttpOnly: No (read client-side)
-- Secure: Yes (HTTPS only)
-- SameSite: Lax
-
-### Environment Variable Injection
-- Client: Injected into `window.__LEASH_ENV__` as JSON
-- Server: Available as `process.env`
-- Fallback: Read from `.env.local` in development
-
-### Error Handling
-- Auth errors: Return null user, don't throw (graceful degradation)
-- Env var errors: Warn in console, return empty object
-- Middleware errors: Redirect to redirectTo or login
-
-## Development Notes
-
-### Assumptions About Leash Platform
-1. Leash injects `leash-auth` cookie into all app requests
-2. Leash injects `window.__LEASH_ENV__` into HTML
-3. Leash provides JWT secret via environment variable
-4. Leash ensures HTTPS only
-
-### What's NOT in MVP
-- Social login options (Google, GitHub, etc.) - that's done by Leash
-- Session management/logout - handled by Leash
-- Token refresh - Leash sends new cookies as needed
-- Multi-tenant/organization support
-- Custom claims in JWT
-
-## Usage Example: Complete Next.js App
-
-```typescript
-// app/layout.tsx
-import { LeashProvider } from '@leash/sdk'
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <LeashProvider>
-          {children}
-        </LeashProvider>
-      </body>
-    </html>
-  )
-}
-
-// app/page.tsx
-'use client'
-import { useLeashAuth, useLeashEnv } from '@leash/sdk'
-
-export default function Home() {
-  const { user, isLoading } = useLeashAuth()
-  const env = useLeashEnv()
-
-  if (isLoading) return <div>Loading...</div>
-
-  return (
-    <div>
-      <h1>Welcome {user?.name}</h1>
-      <p>Your app is: {env.LEASH_APP_ID}</p>
-      <p>Supabase URL: {env.SUPABASE_URL}</p>
-    </div>
-  )
-}
-
-// app/api/data/route.ts
+```ts
 import { getLeashUser } from '@leash/sdk/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
   const user = getLeashUser(req)
-  return NextResponse.json({ 
-    message: `Data for ${user.email}`,
-    userId: user.id 
-  })
+  return NextResponse.json({ user })
 }
 ```
 
-## Deliverables
+### Next.js Middleware
 
-1. **TypeScript source code** in `src/`
-2. **Compiled JavaScript** in `dist/`
-3. **Type definitions** (.d.ts files)
-4. **package.json** with exports
-5. **README.md** with usage docs
-6. **Example Next.js app** showing integration
+```ts
+// middleware.ts
+import { leashMiddleware } from '@leash/sdk/middleware'
+
+export const middleware = leashMiddleware({
+  publicRoutes: ['/login', '/about'],
+  redirectTo: '/login'
+})
+```
+
+### React Client
+
+```tsx
+'use client'
+import { useLeashAuth } from '@leash/sdk'
+
+export default function Page() {
+  const { user, isLoading, error } = useLeashAuth()
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+  if (!user) return <div>Not authenticated</div>
+
+  return <div>Hello {user.name}</div>
+}
+```
+
+### Integrations (server-side)
+
+```ts
+import { LeashIntegrations } from '@leash/sdk/integrations'
+
+const client = new LeashIntegrations({ apiKey: process.env.LEASH_API_KEY })
+const messages = await client.gmail.listMessages({ maxResults: 5 })
+```
+
+### Integrations (React hooks)
+
+```tsx
+import { useIntegrations } from '@leash/sdk/integrations/react'
+
+function Dashboard() {
+  const integrations = useIntegrations()
+  // integrations.gmail.listMessages(), etc.
+}
+```
 
 ## Success Criteria
 
 - [x] `useLeashAuth` returns user object when authenticated
 - [x] `useLeashAuth` returns null when not authenticated
 - [x] `useLeashEnv` returns environment variables
-- [x] `getLeashUser` extracts user from request
-- [x] Server middleware protects routes
-- [x] SDK works in Next.js App Router
+- [x] `getLeashUser` works with Express, Koa, Hono, Fastify, Next.js, plain Node
+- [x] `getLeashUser` works without React or Next.js installed
+- [x] `LeashIntegrations` works without React installed
+- [x] Next.js middleware works via separate entry point
 - [x] No TypeScript errors
 - [x] Builds successfully to dist/
-- [x] Can be imported and used in a Next.js app
+- [x] Published to npm as `@leash/sdk`
 
-## Next Steps (After MVP)
+## License
 
-1. Publish to npm as `@leash/sdk`
-2. Add Supabase helpers
-3. Add logging/analytics
-4. Support other frameworks (Vue, Svelte, etc.)
-5. Add refresh token handling
-6. Add logout/session management
-7. Add unit and integration tests
+Apache-2.0
