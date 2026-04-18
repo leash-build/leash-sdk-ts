@@ -1,3 +1,5 @@
-// Server-side exports
+// Server-side exports — framework-agnostic, no Next.js dependency
 export { getLeashUser, isAuthenticated } from './auth.js'
-export { leashMiddleware, createLeashMiddleware } from './middleware.js'
+
+// Next.js middleware moved to '@leash/sdk/middleware'
+// to avoid pulling in 'next/server' in non-Next.js environments

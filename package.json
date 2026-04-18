@@ -1,6 +1,6 @@
 {
   "name": "@leash/sdk",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "description": "TypeScript SDK for Leash platform - authentication and environment management",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,6 +17,14 @@
     "./integrations": {
       "types": "./dist/integrations/index.d.ts",
       "default": "./dist/integrations/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/server/middleware.d.ts",
+      "default": "./dist/server/middleware.js"
+    },
+    "./integrations/react": {
+      "types": "./dist/integrations/react.d.ts",
+      "default": "./dist/integrations/react.js"
     },
     "./integrations/mcp": {
       "types": "./dist/integrations/mcp.d.ts",
@@ -41,6 +49,14 @@
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "next": "^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

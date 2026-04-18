@@ -1,41 +1,75 @@
-import { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { LEASH_AUTH_COOKIE } from '../constants.js'
 import type { LeashUser, LeashJWTPayload } from '../types.js'
 import { payloadToUser } from '../auth/payload.js'
 
 /**
- * Extract and validate Leash user from Next.js request
+ * Parse a cookie value from a raw Cookie header string.
+ */
+function parseCookie(cookieHeader: string, name: string): string | undefined {
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : undefined
+}
+
+/**
+ * Extract the leash-auth token from any request object.
+ * Works with Express, Next.js, Koa, Hono, plain IncomingMessage — anything
+ * that has headers.cookie or cookies or a cookies.get method.
+ */
+function extractToken(req: any): string | undefined {
+  // Next.js / Web Request style: req.cookies.get(name)
+  if (req.cookies?.get && typeof req.cookies.get === 'function') {
+    const cookie = req.cookies.get(LEASH_AUTH_COOKIE)
+    return typeof cookie === 'string' ? cookie : cookie?.value
+  }
+
+  // Express / cookie-parser style: req.cookies[name]
+  if (req.cookies && typeof req.cookies === 'object' && LEASH_AUTH_COOKIE in req.cookies) {
+    return req.cookies[LEASH_AUTH_COOKIE]
+  }
+
+  // Raw header fallback: works with any HTTP framework
+  const cookieHeader = req.headers?.cookie || req.headers?.get?.('cookie')
+  if (cookieHeader) {
+    return parseCookie(cookieHeader, LEASH_AUTH_COOKIE)
+  }
+
+  return undefined
+}
+
+/**
+ * Extract and validate Leash user from any HTTP request.
  *
- * @param req - Next.js request object
+ * Works with Express, Next.js, Koa, Hono, Fastify, plain Node.js —
+ * any request that carries cookies.
+ *
+ * @param req - Any HTTP request object with headers
  * @returns LeashUser object if authenticated
  * @throws Error if not authenticated or token is invalid
  *
  * @example
  * ```typescript
- * // In Next.js API route (app/api/profile/route.ts)
+ * // Express
  * import { getLeashUser } from '@leash/sdk/server'
- * import { NextRequest, NextResponse } from 'next/server'
+ * app.get('/me', (req, res) => {
+ *   const user = getLeashUser(req)
+ *   res.json({ user })
+ * })
  *
+ * // Next.js
+ * import { getLeashUser } from '@leash/sdk/server'
  * export async function GET(req: NextRequest) {
- *   try {
- *     const user = getLeashUser(req)
- *     return NextResponse.json({ user })
- *   } catch (error) {
- *     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
- *   }
+ *   const user = getLeashUser(req)
+ *   return NextResponse.json({ user })
  * }
  * ```
  */
-export function getLeashUser(req: NextRequest): LeashUser {
-  // Extract cookie from request
-  const cookie = req.cookies.get(LEASH_AUTH_COOKIE)
+export function getLeashUser(req: any): LeashUser {
+  const token = extractToken(req)
 
-  if (!cookie || !cookie.value) {
+  if (!token) {
     throw new Error('Not authenticated: Missing auth cookie')
   }
-
-  const token = cookie.value
 
   try {
     // Get JWT secret from environment
@@ -92,7 +126,7 @@ function decodeTokenWithoutVerification(token: string): LeashUser {
  * @param req - Next.js request object
  * @returns true if authenticated, false otherwise
  */
-export function isAuthenticated(req: NextRequest): boolean {
+export function isAuthenticated(req: any): boolean {
   try {
     getLeashUser(req)
     return true

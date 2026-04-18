@@ -8,10 +8,6 @@ export { getIntegrations } from './server.js'
 export { getLeashMcpConfig, getLeashMcpUrl } from './mcp.js'
 export type { McpServerConfig } from './mcp.js'
 
-// Hooks
-export { useIntegrations } from './hooks/useIntegrations.js'
-export { useIntegrationStatus } from './hooks/useIntegrationStatus.js'
-
 // Types
 export { IntegrationError } from './types.js'
 export type {
