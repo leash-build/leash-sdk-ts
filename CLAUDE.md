@@ -212,6 +212,9 @@ npm publish --access public --otp=CODE
 
 Current version: check `package.json`.
 
+## CI
+GitHub Actions runs on every push to main and on PRs. Tests must pass before merging.
+
 ## Critical Rules
 
 - **Never add React or Next.js imports to `server/auth.ts` or `integrations/client.ts`.** These must stay framework-agnostic.
