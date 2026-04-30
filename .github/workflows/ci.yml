@@ -20,3 +20,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      # LEA-126: catch regressions where @leash/sdk's `./server` entry
+      # transitively imports next/server (or any other framework-specific
+      # module) and breaks for non-Next consumers like Express. The smoke
+      # packs the SDK, installs it into a project with no other deps, and
+      # imports @leash/sdk/server. This regressed silently in 0.3.2 because
+      # nothing in CI exercised the non-Next consumer path; CLAUDE.md's
+      # entry-point isolation rule is now backed by an executable check.
+      - run: npm run smoke:non-next

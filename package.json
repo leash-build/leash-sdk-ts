@@ -35,7 +35,8 @@
     "build": "tsc && tsc -p tsconfig.esm.json",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:non-next": "scripts/smoke-non-next.sh"
   },
   "keywords": [
     "leash",
