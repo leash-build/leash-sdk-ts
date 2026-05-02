@@ -1,5 +1,5 @@
 import { IntegrationError } from './types.js'
-import type { ConnectionStatus, GmailMessageList, GmailLabelList, DriveFile, DriveFileList, CalendarList, CalendarEventList, CalendarEvent } from './types.js'
+import type { ConnectionStatus, CustomMcpServerConfig, GmailMessageList, GmailLabelList, DriveFile, DriveFileList, CalendarList, CalendarEventList, CalendarEvent } from './types.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 
@@ -292,9 +292,55 @@ export class LeashIntegrations {
     return data.data
   }
 
-  /** Get the URL to connect a provider (for UI buttons) */
+  /** Get the URL to connect a provider (for UI buttons).
+   *
+   *  Works for both built-in providers (gmail, google_calendar, …) and
+   *  org-registered custom OAuth providers (LEA-142, e.g. slack, notion). */
   getConnectUrl(providerId: string, returnUrl?: string): string {
     const params = returnUrl ? `?return_url=${encodeURIComponent(returnUrl)}` : ''
     return `${this.platformUrl}/api/integrations/connect/${providerId}${params}`
+  }
+
+  /** Get the user's current access token for a provider — built-in or
+   *  org-registered (LEA-142). Lets you call third-party APIs directly
+   *  without proxying every request through Leash. Refresh-on-expiry
+   *  happens transparently on the platform side.
+   *
+   *  Throws \`IntegrationError\` with \`code='not_connected'\` when the user
+   *  hasn't completed the OAuth flow for this provider. */
+  async getAccessToken(provider: string): Promise<string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`
+    if (this.apiKey) headers['X-API-Key'] = this.apiKey
+
+    const res = await fetch(`${this.platformUrl}/api/integrations/token`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ provider }),
+    })
+    const data = await res.json()
+    if (!data.success) throw new IntegrationError(data)
+    return data.data.accessToken as string
+  }
+
+  /** Get the resolved config for a customer-registered MCP server (LEA-143).
+   *  Returns the customer's MCP URL plus auth headers (\`Authorization:
+   *  Bearer …\` for bearer-auth servers) — feed this directly into your
+   *  MCP client. Leash isn't on the MCP request path. */
+  async getCustomMcpConfig(slug: string): Promise<CustomMcpServerConfig> {
+    const headers: Record<string, string> = {}
+    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`
+    if (this.apiKey) headers['X-API-Key'] = this.apiKey
+
+    const res = await fetch(
+      `${this.platformUrl}/api/integrations/mcp-config/${encodeURIComponent(slug)}`,
+      { headers, credentials: 'include' },
+    )
+    const data = await res.json()
+    if (!data.success) throw new IntegrationError(data)
+    return data.data as CustomMcpServerConfig
   }
 }

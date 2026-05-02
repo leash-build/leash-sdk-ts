@@ -10,8 +10,19 @@ export interface ConnectionStatus {
 export interface IntegrationErrorResponse {
   success: false
   error: string
-  code?: 'not_connected' | 'token_expired'
+  code?: string
   connectUrl?: string
+}
+
+/** Resolved config for a customer-registered MCP server (LEA-143). */
+export interface CustomMcpServerConfig {
+  slug: string
+  displayName: string
+  /** Customer's MCP endpoint. */
+  url: string
+  /** Headers to attach to every request, including resolved Authorization
+   *  for bearer-auth servers. */
+  headers: Record<string, string>
 }
 
 export interface GmailMessage {
