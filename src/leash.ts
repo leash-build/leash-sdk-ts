@@ -1,5 +1,5 @@
 import { LeashError } from './errors.js'
-import type { CalendarList, CalendarEventList, CalendarEvent } from './integrations/types.js'
+import type { CalendarList, CalendarEventList, CalendarEvent, DriveFile, DriveFileList } from './integrations/types.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 
@@ -38,6 +38,13 @@ export class Leash {
       listEvents(params?: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number; query?: string; singleEvents?: boolean; orderBy?: string }): Promise<CalendarEventList>
       createEvent(params: { calendarId?: string; summary: string; description?: string; location?: string; start: { dateTime?: string; date?: string; timeZone?: string }; end: { dateTime?: string; date?: string; timeZone?: string }; attendees?: { email: string }[] }): Promise<CalendarEvent>
       getEvent(eventId: string, calendarId?: string): Promise<CalendarEvent>
+    }
+    drive: {
+      listFiles(params?: { query?: string; maxResults?: number; folderId?: string }): Promise<DriveFileList>
+      getFile(fileId: string): Promise<DriveFile>
+      downloadFile(fileId: string): Promise<unknown>
+      createFolder(name: string, parentId?: string): Promise<DriveFile>
+      uploadFile(params: { name: string; content: string; mimeType: string; parentId?: string }): Promise<DriveFile>
     }
   }
 
@@ -94,6 +101,18 @@ export class Leash {
           this._call('google_calendar', 'create-event', params) as Promise<CalendarEvent>,
         getEvent: (eventId: string, calendarId?: string) =>
           this._call('google_calendar', 'get-event', { eventId, calendarId }) as Promise<CalendarEvent>,
+      },
+      drive: {
+        listFiles: (params?: { query?: string; maxResults?: number; folderId?: string }) =>
+          this._call('google_drive', 'list-files', params) as Promise<DriveFileList>,
+        getFile: (fileId: string) =>
+          this._call('google_drive', 'get-file', { fileId }) as Promise<DriveFile>,
+        downloadFile: (fileId: string) =>
+          this._call('google_drive', 'download-file', { fileId }),
+        createFolder: (name: string, parentId?: string) =>
+          this._call('google_drive', 'create-folder', { name, parentId }) as Promise<DriveFile>,
+        uploadFile: (params: { name: string; content: string; mimeType: string; parentId?: string }) =>
+          this._call('google_drive', 'upload-file', params) as Promise<DriveFile>,
       },
     }
   }

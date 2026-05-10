@@ -253,3 +253,65 @@ describe('Leash.integrations.calendar — server mode fetch calls', () => {
     )
   })
 })
+
+describe('Leash.integrations.drive — server mode fetch calls', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    process.env['LEASH_API_KEY'] = 'server-api-key'
+  })
+
+  it('listFiles POSTs to /api/integrations/google_drive/list-files with params in body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { files: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    const leash = new Leash({
+      request: makeRequest('auth-cookie-value'),
+      platformUrl: 'https://staging.leash.build',
+    })
+
+    await leash.integrations.drive.listFiles({ query: 'mimeType="application/pdf"' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://staging.leash.build/api/integrations/google_drive/list-files',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer server-api-key',
+          Cookie: 'leash-auth=auth-cookie-value',
+        }),
+        body: JSON.stringify({ query: 'mimeType="application/pdf"' }),
+      })
+    )
+  })
+
+  it('uploadFile POSTs to /api/integrations/google_drive/upload-file with file params', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: 'file-123', name: 'x', mimeType: 'text/plain' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    const leash = new Leash({
+      request: makeRequest('tok'),
+      platformUrl: 'https://leash.build',
+    })
+
+    const fileParams = { name: 'x', content: 'hello world', mimeType: 'text/plain' }
+    await leash.integrations.drive.uploadFile(fileParams)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://leash.build/api/integrations/google_drive/upload-file',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(fileParams),
+      })
+    )
+  })
+})
