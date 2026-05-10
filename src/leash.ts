@@ -1,4 +1,5 @@
 import { LeashError } from './errors.js'
+import type { CalendarList, CalendarEventList, CalendarEvent } from './integrations/types.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 
@@ -31,6 +32,12 @@ export class Leash {
     gmail: {
       listMessages(params?: { query?: string; maxResults?: number }): Promise<unknown>
       getMessage(messageId: string, format?: 'full' | 'metadata' | 'minimal' | 'raw'): Promise<unknown>
+    }
+    calendar: {
+      listCalendars(): Promise<CalendarList>
+      listEvents(params?: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number; query?: string; singleEvents?: boolean; orderBy?: string }): Promise<CalendarEventList>
+      createEvent(params: { calendarId?: string; summary: string; description?: string; location?: string; start: { dateTime?: string; date?: string; timeZone?: string }; end: { dateTime?: string; date?: string; timeZone?: string }; attendees?: { email: string }[] }): Promise<CalendarEvent>
+      getEvent(eventId: string, calendarId?: string): Promise<CalendarEvent>
     }
   }
 
@@ -77,6 +84,16 @@ export class Leash {
           this._call('gmail', 'list-messages', params),
         getMessage: (messageId: string, format?: 'full' | 'metadata' | 'minimal' | 'raw') =>
           this._call('gmail', 'get-message', { messageId, format }),
+      },
+      calendar: {
+        listCalendars: () =>
+          this._call('google_calendar', 'list-calendars') as Promise<CalendarList>,
+        listEvents: (params?: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number; query?: string; singleEvents?: boolean; orderBy?: string }) =>
+          this._call('google_calendar', 'list-events', params) as Promise<CalendarEventList>,
+        createEvent: (params: { calendarId?: string; summary: string; description?: string; location?: string; start: { dateTime?: string; date?: string; timeZone?: string }; end: { dateTime?: string; date?: string; timeZone?: string }; attendees?: { email: string }[] }) =>
+          this._call('google_calendar', 'create-event', params) as Promise<CalendarEvent>,
+        getEvent: (eventId: string, calendarId?: string) =>
+          this._call('google_calendar', 'get-event', { eventId, calendarId }) as Promise<CalendarEvent>,
       },
     }
   }
