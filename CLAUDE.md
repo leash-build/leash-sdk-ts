@@ -14,6 +14,7 @@ TypeScript SDK for the Leash platform. Provides authentication, environment vari
 | `@leash/sdk/integrations` | `LeashIntegrations`, `getIntegrations`, MCP helpers, types | Nothing |
 | `@leash/sdk/integrations/react` | `useIntegrations`, `useIntegrationStatus` | React |
 | `@leash/sdk/integrations/mcp` | `getLeashMcpConfig`, `getLeashMcpUrl` | Nothing |
+| `@leash/sdk/leash` | `Leash`, `LeashError`, `LeashErrorCode`, `LeashErrorOptions` (0.4 unified client) | Nothing |
 
 **Critical: entry point isolation.** Each entry point only imports what it needs. `@leash/sdk/server` does NOT import React or Next.js. `@leash/sdk/integrations` does NOT import React. This is intentional — mixing them breaks non-React/non-Next.js apps.
 
