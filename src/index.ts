@@ -18,4 +18,4 @@ export { LEASH_AUTH_COOKIE, DEFAULT_REDIRECT_PATH, LEASH_ENV_KEYS } from './cons
 // 0.4 unified class + error
 export { Leash } from './leash.js'
 export { LeashError } from './errors.js'
-export type { LeashErrorOptions } from './errors.js'
+export type { LeashErrorOptions, LeashErrorCode } from './errors.js'

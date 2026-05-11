@@ -93,14 +93,22 @@ describe('Leash constructor', () => {
     expect(leash).toBeDefined()
   })
 
-  it('respects LEASH_PLATFORM_URL env var (Critical #3)', () => {
+  it('respects LEASH_PLATFORM_URL env var (Critical #3)', async () => {
     process.env['LEASH_API_KEY'] = 'test-key'
     process.env['LEASH_PLATFORM_URL'] = 'https://staging.leash.build'
     try {
-      // We can't easily inspect private platformUrl, but we can verify
-      // it's read by checking the fetch URL in a call
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
       const leash = new Leash({ request: makeRequest('tok') })
-      expect(leash).toBeDefined()
+      await leash.integrations.gmail.listMessages()
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('https://staging.leash.build'),
+        expect.anything()
+      )
     } finally {
       delete process.env['LEASH_PLATFORM_URL']
     }
