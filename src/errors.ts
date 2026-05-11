@@ -1,12 +1,21 @@
+export type LeashErrorCode =
+  | 'NO_API_KEY'
+  | 'NO_REQUEST_SERVER_CONSTRUCT'
+  | 'BROWSER_MODE_UNSUPPORTED'
+  | 'UNAUTHORIZED'
+  | 'INTEGRATION_NOT_ENABLED'
+  | 'INTEGRATION_ERROR'
+  | 'NETWORK_ERROR'
+
 export interface LeashErrorOptions {
-  code: string
+  code: LeashErrorCode
   message: string
   action?: string
   seeAlso?: string
 }
 
 export class LeashError extends Error {
-  readonly code: string
+  readonly code: LeashErrorCode
   readonly action?: string
   readonly seeAlso?: string
 
