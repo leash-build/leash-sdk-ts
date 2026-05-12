@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import jwt from 'jsonwebtoken'
 import { Leash } from '../src/leash'
 import { LeashError } from '../src/errors'
 
@@ -606,5 +607,347 @@ describe('Cookie extraction — _extractCookie', () => {
     const [, init] = fetchMock.mock.calls[0]
     const headers = (init as RequestInit).headers as Record<string, string>
     expect(headers['Cookie']).toBeUndefined()
+  })
+})
+
+// ─── leash.auth — server-mode reader ──────────────────────────────────────────
+
+const AUTH_TEST_SECRET = 'auth-test-secret'
+const AUTH_TEST_PAYLOAD = {
+  userId: 'user-abc',
+  email: 'arvin@leash.build',
+  name: 'Arvin',
+}
+
+function makeAuthToken(payload = AUTH_TEST_PAYLOAD, secret = AUTH_TEST_SECRET) {
+  return jwt.sign(payload, secret, { expiresIn: '1h' })
+}
+
+function makeRequestWithCookie(cookieValue?: string) {
+  return {
+    cookies: {
+      get(name: string): { value: string } | undefined {
+        if (name === 'leash-auth' && cookieValue !== undefined) {
+          return { value: cookieValue }
+        }
+        return undefined
+      },
+    },
+  }
+}
+
+describe('leash.auth.user() — server mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    process.env['LEASH_API_KEY'] = 'test-key'
+    vi.stubEnv('LEASH_JWT_SECRET', AUTH_TEST_SECRET)
+  })
+
+  it('returns LeashUser with correct id, email, name when cookie holds a valid JWT', () => {
+    const token = makeAuthToken()
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    const user = leash.auth.user()
+    expect(user).not.toBeNull()
+    expect(user!.id).toBe('user-abc')
+    expect(user!.email).toBe('arvin@leash.build')
+    expect(user!.name).toBe('Arvin')
+  })
+
+  it('returns null when no leash-auth cookie is present', () => {
+    const leash = new Leash({ request: makeRequestWithCookie(undefined) })
+    expect(leash.auth.user()).toBeNull()
+  })
+
+  it('returns null (does NOT throw) when cookie contains a malformed JWT', () => {
+    const leash = new Leash({ request: makeRequestWithCookie('not.a.valid.jwt') })
+    expect(() => leash.auth.user()).not.toThrow()
+    expect(leash.auth.user()).toBeNull()
+  })
+
+  it('returns null when cookie JWT has an invalid signature', () => {
+    const token = jwt.sign(AUTH_TEST_PAYLOAD, 'wrong-secret')
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    expect(leash.auth.user()).toBeNull()
+  })
+})
+
+describe('leash.auth.isAuthenticated() — server mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    process.env['LEASH_API_KEY'] = 'test-key'
+    vi.stubEnv('LEASH_JWT_SECRET', AUTH_TEST_SECRET)
+  })
+
+  it('returns true when user() returns a valid user', () => {
+    const token = makeAuthToken()
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    expect(leash.auth.isAuthenticated()).toBe(true)
+  })
+
+  it('returns false when user() returns null', () => {
+    const leash = new Leash({ request: makeRequestWithCookie(undefined) })
+    expect(leash.auth.isAuthenticated()).toBe(false)
+  })
+
+  it('mirrors user() truthiness — malformed cookie → false', () => {
+    const leash = new Leash({ request: makeRequestWithCookie('garbage') })
+    expect(leash.auth.isAuthenticated()).toBe(false)
+  })
+})
+
+// ─── Leash.createDevAuthHandler ───────────────────────────────────────────────
+
+function makeGetRequest(url: string) {
+  return { url }
+}
+
+describe('Leash.createDevAuthHandler() — missing code', () => {
+  it('returns 400 HTML when no code param in URL', async () => {
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth'))
+    expect(res.status).toBe(400)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    const body = await res.text()
+    expect(body).toContain('Missing exchange code')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    delete process.env['LEASH_PLATFORM_URL']
+  })
+
+  it('returns 302 with Set-Cookie containing the token, HttpOnly and Path=/', async () => {
+    const fakeToken = 'fake.jwt.token'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: fakeToken, expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc123'))
+
+    expect(res.status).toBe(302)
+    const setCookie = res.headers.get('set-cookie')
+    expect(setCookie).not.toBeNull()
+    expect(setCookie).toContain(`leash-auth=${fakeToken}`)
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toContain('Path=/')
+  })
+
+  it('redirects to / by default', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('location')).toBe('/')
+  })
+
+  it('respects custom redirectTo option', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler({ redirectTo: '/dashboard' })
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('location')).toBe('/dashboard')
+  })
+
+  it('includes SameSite=Lax in Set-Cookie', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('set-cookie')).toContain('SameSite=Lax')
+  })
+
+  it('derives Max-Age from platform expires_at', async () => {
+    const futureMs = Date.now() + 4 * 60 * 60 * 1000 // 4 hours from now
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(futureMs).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    const setCookie = res.headers.get('set-cookie')
+    // Max-Age should be approximately 4 hours in seconds (within a few seconds of 14400)
+    const match = setCookie?.match(/Max-Age=(\d+)/)
+    expect(match).not.toBeNull()
+    const maxAge = parseInt(match![1], 10)
+    expect(maxAge).toBeGreaterThan(4 * 60 * 60 - 5)
+    expect(maxAge).toBeLessThanOrEqual(4 * 60 * 60)
+  })
+
+  it('falls back to cookieMaxAge constant when expires_at is absent', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok' },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler({ cookieMaxAge: 3600 })
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('set-cookie')).toContain('Max-Age=3600')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — exchange error responses', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    delete process.env['LEASH_PLATFORM_URL']
+  })
+
+  it('returns 410 HTML when platform returns 410 (code expired/used)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'Code expired or already redeemed' }), { status: 410 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=used'))
+    expect(res.status).toBe(410)
+    const body = await res.text()
+    expect(body).toContain('expired')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('returns 404 HTML when platform returns 404 (unknown code)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'Unknown code' }), { status: 404 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=unknown'))
+    expect(res.status).toBe(404)
+    const body = await res.text()
+    expect(body).toContain('Unknown code')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('returns 500 HTML when platform returns 5xx status', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'Internal error' }), { status: 503 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=xyz'))
+    expect(res.status).toBe(500)
+    const body = await res.text()
+    expect(body).toContain('Authentication failed')
+  })
+
+  it('passes through 4xx status codes verbatim for unexpected errors', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'Invalid JSON body' }), { status: 400 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=xyz'))
+    expect(res.status).toBe(400)
+    const body = await res.text()
+    expect(body).toContain('Authentication failed')
+  })
+
+  it('includes platform error message as secondary note in error page', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'User context no longer valid' }), { status: 410 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=used'))
+    const body = await res.text()
+    expect(body).toContain('User context no longer valid')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — LEASH_PLATFORM_URL env var', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+  })
+
+  it('POSTs to LEASH_PLATFORM_URL when set', async () => {
+    process.env['LEASH_PLATFORM_URL'] = 'https://staging.leash.build'
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    try {
+      const handler = Leash.createDevAuthHandler()
+      await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('https://staging.leash.build'),
+        expect.anything()
+      )
+    } finally {
+      delete process.env['LEASH_PLATFORM_URL']
+    }
+  })
+
+  it('POSTs to https://leash.build by default (no env var)', async () => {
+    delete process.env['LEASH_PLATFORM_URL']
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('https://leash.build'),
+      expect.anything()
+    )
   })
 })
