@@ -34,12 +34,28 @@ interface DevAuthHandlerOptions {
 
 type TransportMode = 'server' | 'browser'
 
+interface EnvGetOptions {
+  /**
+   * When true, skip the TTL cache read and fetch a fresh value from the
+   * platform. The freshly-fetched value is still written back to the cache.
+   */
+  fresh?: boolean
+}
+
+interface EnvCacheEntry {
+  value: string
+  expiresAt: number
+}
+
+const ENV_CACHE_TTL_MS = 60_000 // 60 seconds
+
 export class Leash {
   private mode: TransportMode
   private platformUrl: string
   private apiKey?: string
   private cookieValue?: string
   private _request?: unknown
+  private _envCache = new Map<string, EnvCacheEntry>()
 
   readonly auth: {
     /**
@@ -86,6 +102,22 @@ export class Leash {
       searchFiles(query: string, maxResults?: number): Promise<DriveFileList>
     }
     linear: LeashLinearNamespace
+  }
+
+  readonly env: {
+    /**
+     * Resolves an env-var value from the Leash platform on demand.
+     * Results are cached for 60 seconds per key per Leash instance.
+     * Pass `{ fresh: true }` to bypass the cache read (still writes back).
+     * Server mode only in 0.4.
+     */
+    get(key: string, opts?: EnvGetOptions): Promise<string>
+    /**
+     * Bulk variant — resolves multiple env-var values in parallel.
+     * Each key uses the shared per-instance TTL cache.
+     * If any key fails, the whole call rejects with that error.
+     */
+    getMany(keys: string[]): Promise<Record<string, string>>
   }
 
   constructor(opts: LeashOptions = {}) {
@@ -242,6 +274,118 @@ export class Leash {
         },
       },
     }
+
+    // Build env namespace
+    this.env = {
+      get: (key: string, opts?: EnvGetOptions) => this._envGet(key, opts),
+      getMany: (keys: string[]) => this._envGetMany(keys),
+    }
+  }
+
+  private async _envGet(key: string, opts?: EnvGetOptions): Promise<string> {
+    const now = Date.now()
+    const fresh = opts?.fresh === true
+
+    // Check cache first (unless fresh: true is requested)
+    if (!fresh) {
+      const cached = this._envCache.get(key)
+      if (cached && cached.expiresAt > now) {
+        return cached.value
+      }
+    }
+
+    // Fetch from platform: GET /api/apps/me/secrets/[key]
+    // Auth: Authorization: Bearer <LEASH_API_KEY>
+    const url = `${this.platformUrl}/api/apps/me/secrets/${encodeURIComponent(key)}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    })
+
+    if (res.status === 401) {
+      throw new LeashError({
+        code: 'UNAUTHORIZED',
+        message: 'Missing or invalid LEASH_API_KEY.',
+        action:
+          'Your LEASH_API_KEY is missing or invalid. Mint a new one at /dashboard/organization/api-keys.',
+        seeAlso: 'https://leash.build/dashboard/organization/api-keys',
+      })
+    }
+
+    if (res.status === 402) {
+      let requiredPlan: string | undefined
+      try {
+        const body = await res.clone().json() as Record<string, unknown>
+        if (typeof body['requiredPlan'] === 'string') requiredPlan = body['requiredPlan']
+      } catch { /* ignore parse errors */ }
+      throw new LeashError({
+        code: 'UPGRADE_REQUIRED',
+        message: `leash.env.get requires the Growth plan or above${requiredPlan ? ` (requiredPlan: ${requiredPlan})` : ''}.`,
+        action:
+          'leash.env.get requires the Growth plan or above. Upgrade at https://leash.build/dashboard/billing.',
+        seeAlso: 'https://leash.build/dashboard/billing',
+      })
+    }
+
+    if (res.status === 404) {
+      throw new LeashError({
+        code: 'KEY_NOT_DECLARED',
+        message: `Key '${key}' is not declared in any app's required env vars or not found in any configured source.`,
+        action: `Add '${key}' to your app's .env.example so Leash knows it should be resolvable, and ensure an org-level secret source provides the value.`,
+        seeAlso: 'https://leash.build/docs/sdk',
+      })
+    }
+
+    if (res.status === 502) {
+      let platformError: string | undefined
+      try {
+        const body = await res.clone().json() as Record<string, unknown>
+        if (typeof body['error'] === 'string') platformError = body['error']
+      } catch { /* ignore parse errors */ }
+      throw new LeashError({
+        code: 'SOURCE_RESYNC_FAILED',
+        message: platformError ?? 'Secret source resync failed on the platform side.',
+        action: 'Check your secret source configuration in the Leash dashboard.',
+        seeAlso: 'https://leash.build/dashboard',
+      })
+    }
+
+    if (!res.ok) {
+      throw new LeashError({
+        code: 'ENV_FETCH_ERROR',
+        message: `Unexpected response from platform: HTTP ${res.status}`,
+        action: 'Check the Leash platform status and your configuration.',
+        seeAlso: 'https://leash.build/docs/sdk',
+      })
+    }
+
+    const body = await res.json() as Record<string, unknown>
+    const value = body['value']
+    if (typeof value !== 'string') {
+      throw new LeashError({
+        code: 'ENV_FETCH_ERROR',
+        message: `Platform returned an unexpected response shape for key '${key}'.`,
+        action: 'Check the Leash platform status and your configuration.',
+        seeAlso: 'https://leash.build/docs/sdk',
+      })
+    }
+
+    // Write to cache (even when fresh: true was requested)
+    this._envCache.set(key, { value, expiresAt: now + ENV_CACHE_TTL_MS })
+
+    return value
+  }
+
+  private async _envGetMany(keys: string[]): Promise<Record<string, string>> {
+    const entries = await Promise.all(
+      keys.map(async (key) => {
+        const value = await this._envGet(key)
+        return [key, value] as [string, string]
+      })
+    )
+    return Object.fromEntries(entries)
   }
 
   /**
