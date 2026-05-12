@@ -1,4 +1,6 @@
 import { LeashError } from './errors.js'
+import { getLeashUser } from './server/auth.js'
+import type { LeashUser } from './types.js'
 import type { GmailMessageList, GmailLabelList, CalendarList, CalendarEventList, CalendarEvent, DriveFile, DriveFileList } from './integrations/types.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
@@ -19,6 +21,21 @@ export class Leash {
   private platformUrl: string
   private apiKey?: string
   private cookieValue?: string
+  private _request?: unknown
+
+  readonly auth: {
+    /**
+     * Returns the authenticated LeashUser from the request's leash-auth cookie,
+     * or null if not authenticated / cookie is missing or invalid.
+     * Sync — no await needed.
+     * Server mode only in 0.4.
+     */
+    user(): LeashUser | null
+    /**
+     * True when auth.user() returns a non-null user.
+     */
+    isAuthenticated(): boolean
+  }
 
   readonly integrations: {
     gmail: {
@@ -53,6 +70,7 @@ export class Leash {
     if (opts.request !== undefined) {
       // Server mode
       this.mode = 'server'
+      this._request = opts.request
 
       this.apiKey = opts.apiKey ?? process.env['LEASH_API_KEY']
       if (!this.apiKey) {
@@ -86,6 +104,31 @@ export class Leash {
           "Pass { request: req } to the Leash constructor in server code, or add 'use client' if this is a React component.",
         seeAlso: 'https://leash.build/docs/sdk',
       })
+    }
+
+    // Build auth namespace
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this
+    this.auth = {
+      user(): LeashUser | null {
+        if (self.mode !== 'server') {
+          throw new LeashError({
+            code: 'BROWSER_MODE_UNSUPPORTED',
+            message: 'leash.auth.user() is not supported in browser mode.',
+            action:
+              'Construct Leash with { request: req } in server code. Browser-side auth reads are deferred to a later 0.4 milestone.',
+            seeAlso: 'https://leash.build/docs/sdk',
+          })
+        }
+        try {
+          return getLeashUser(self._request)
+        } catch {
+          return null
+        }
+      },
+      isAuthenticated(): boolean {
+        return this.user() !== null
+      },
     }
 
     // Build integrations namespace

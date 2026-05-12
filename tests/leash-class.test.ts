@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import jwt from 'jsonwebtoken'
 import { Leash } from '../src/leash'
 import { LeashError } from '../src/errors'
 
@@ -606,5 +607,92 @@ describe('Cookie extraction — _extractCookie', () => {
     const [, init] = fetchMock.mock.calls[0]
     const headers = (init as RequestInit).headers as Record<string, string>
     expect(headers['Cookie']).toBeUndefined()
+  })
+})
+
+// ─── leash.auth — server-mode reader ──────────────────────────────────────────
+
+const AUTH_TEST_SECRET = 'auth-test-secret'
+const AUTH_TEST_PAYLOAD = {
+  userId: 'user-abc',
+  email: 'arvin@leash.build',
+  name: 'Arvin',
+}
+
+function makeAuthToken(payload = AUTH_TEST_PAYLOAD, secret = AUTH_TEST_SECRET) {
+  return jwt.sign(payload, secret, { expiresIn: '1h' })
+}
+
+function makeRequestWithCookie(cookieValue?: string) {
+  return {
+    cookies: {
+      get(name: string): { value: string } | undefined {
+        if (name === 'leash-auth' && cookieValue !== undefined) {
+          return { value: cookieValue }
+        }
+        return undefined
+      },
+    },
+  }
+}
+
+describe('leash.auth.user() — server mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    process.env['LEASH_API_KEY'] = 'test-key'
+    vi.stubEnv('LEASH_JWT_SECRET', AUTH_TEST_SECRET)
+  })
+
+  it('returns LeashUser with correct id, email, name when cookie holds a valid JWT', () => {
+    const token = makeAuthToken()
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    const user = leash.auth.user()
+    expect(user).not.toBeNull()
+    expect(user!.id).toBe('user-abc')
+    expect(user!.email).toBe('arvin@leash.build')
+    expect(user!.name).toBe('Arvin')
+  })
+
+  it('returns null when no leash-auth cookie is present', () => {
+    const leash = new Leash({ request: makeRequestWithCookie(undefined) })
+    expect(leash.auth.user()).toBeNull()
+  })
+
+  it('returns null (does NOT throw) when cookie contains a malformed JWT', () => {
+    const leash = new Leash({ request: makeRequestWithCookie('not.a.valid.jwt') })
+    expect(() => leash.auth.user()).not.toThrow()
+    expect(leash.auth.user()).toBeNull()
+  })
+
+  it('returns null when cookie JWT has an invalid signature', () => {
+    const token = jwt.sign(AUTH_TEST_PAYLOAD, 'wrong-secret')
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    expect(leash.auth.user()).toBeNull()
+  })
+})
+
+describe('leash.auth.isAuthenticated() — server mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    process.env['LEASH_API_KEY'] = 'test-key'
+    vi.stubEnv('LEASH_JWT_SECRET', AUTH_TEST_SECRET)
+  })
+
+  it('returns true when user() returns a valid user', () => {
+    const token = makeAuthToken()
+    const leash = new Leash({ request: makeRequestWithCookie(token) })
+    expect(leash.auth.isAuthenticated()).toBe(true)
+  })
+
+  it('returns false when user() returns null', () => {
+    const leash = new Leash({ request: makeRequestWithCookie(undefined) })
+    expect(leash.auth.isAuthenticated()).toBe(false)
+  })
+
+  it('mirrors user() truthiness — malformed cookie → false', () => {
+    const leash = new Leash({ request: makeRequestWithCookie('garbage') })
+    expect(leash.auth.isAuthenticated()).toBe(false)
   })
 })
