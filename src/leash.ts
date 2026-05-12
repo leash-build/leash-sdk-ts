@@ -14,6 +14,12 @@ interface LeashOptions {
   apiKey?: string
 }
 
+interface DevAuthHandlerOptions {
+  cookieName?: string
+  cookieMaxAge?: number
+  redirectTo?: string
+}
+
 type TransportMode = 'server' | 'browser'
 
 export class Leash {
@@ -35,6 +41,12 @@ export class Leash {
      * True when auth.user() returns a non-null user.
      */
     isAuthenticated(): boolean
+    /**
+     * Returns a request handler (req) => Promise<Response> that implements the
+     * LEA-186 local-dev cookie-exchange flow. Mount at /api/_leash/dev-auth.
+     * Thin instance wrapper around Leash.createDevAuthHandler().
+     */
+    attachLocalDevHandler(opts?: DevAuthHandlerOptions): (req: unknown) => Promise<Response>
   }
 
   readonly integrations: {
@@ -129,6 +141,9 @@ export class Leash {
       isAuthenticated(): boolean {
         return this.user() !== null
       },
+      attachLocalDevHandler(opts?: DevAuthHandlerOptions): (req: unknown) => Promise<Response> {
+        return Leash.createDevAuthHandler(opts)
+      },
     }
 
     // Build integrations namespace
@@ -173,6 +188,136 @@ export class Leash {
         searchFiles: (query: string, maxResults?: number) =>
           this._call('google_drive', 'search-files', { query, maxResults }) as Promise<DriveFileList>,
       },
+    }
+  }
+
+  /**
+   * Returns a Next.js-style route handler that implements the LEA-186
+   * local-dev cookie-exchange flow. Mount at /api/_leash/dev-auth.
+   *
+   * @example
+   * ```ts
+   * // src/app/api/_leash/dev-auth/route.ts
+   * import { Leash } from '@leash/sdk/leash'
+   * export const GET = Leash.createDevAuthHandler()
+   * ```
+   */
+  static createDevAuthHandler(opts: DevAuthHandlerOptions = {}): (req: unknown) => Promise<Response> {
+    const {
+      cookieName = 'leash-auth',
+      cookieMaxAge = 8 * 60 * 60,
+      redirectTo = '/',
+    } = opts
+
+    return async function leashDevAuthHandler(req: unknown): Promise<Response> {
+      // Extract the ?code= query param from the request URL.
+      // Works with Next.js Request (Web API) and any object with a url string.
+      let code: string | null = null
+      try {
+        const reqAny = req as Record<string, unknown>
+        let urlStr: string | undefined
+        if (typeof reqAny['url'] === 'string') {
+          urlStr = reqAny['url']
+        }
+        if (urlStr) {
+          const url = new URL(urlStr, 'http://localhost')
+          code = url.searchParams.get('code')
+        }
+      } catch {
+        // Fall through — code stays null
+      }
+
+      if (!code) {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Missing exchange code',
+            body: 'No <code>code</code> parameter was found in the URL.',
+            hint: 'Click <strong>Open in local dev</strong> from the Leash dashboard to start a fresh session.',
+          }),
+          { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      const platformUrl = process.env['LEASH_PLATFORM_URL'] ?? DEFAULT_PLATFORM_URL
+
+      let exchangeRes: Response
+      try {
+        exchangeRes = await fetch(`${platformUrl}/api/auth/exchange-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        })
+      } catch {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Could not reach Leash',
+            body: 'Failed to connect to the Leash platform to exchange your code.',
+            hint: 'Check your internet connection and try again.',
+          }),
+          { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      if (exchangeRes.status === 410) {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Code expired or already used',
+            body: 'This exchange code has expired or was already used.',
+            hint: 'Click <strong>Open in local dev</strong> from the Leash dashboard to get a fresh code.',
+          }),
+          { status: 410, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      if (exchangeRes.status === 404) {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Unknown code',
+            body: 'The exchange code was not recognised by the Leash platform.',
+            hint: 'Click <strong>Open in local dev</strong> from the Leash dashboard to get a valid code.',
+          }),
+          { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      if (!exchangeRes.ok) {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Authentication failed',
+            body: 'The Leash platform returned an unexpected error.',
+            hint: 'Try again or contact support if the issue persists.',
+          }),
+          { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      let token: string
+      try {
+        const data = await exchangeRes.json() as Record<string, unknown>
+        if (typeof data['token'] !== 'string') {
+          throw new Error('No token in response')
+        }
+        token = data['token']
+      } catch {
+        return new Response(
+          _devAuthErrorPage({
+            title: 'Unexpected response from Leash',
+            body: 'The platform response did not contain a valid token.',
+            hint: 'Try again or contact support if the issue persists.',
+          }),
+          { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
+
+      const cookieValue = `${cookieName}=${token}; HttpOnly; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax`
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: redirectTo,
+          'Set-Cookie': cookieValue,
+        },
+      })
     }
   }
 
@@ -285,4 +430,35 @@ export function _extractCookie(req: any, name: string): string | undefined {
   }
 
   return undefined
+}
+
+/**
+ * Render a minimal, action-oriented HTML error page for the dev-auth handler.
+ * Not JSON — this is a browser redirect target.
+ */
+function _devAuthErrorPage(opts: { title: string; body: string; hint: string }): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leash — ${opts.title}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 80px auto; padding: 0 24px; color: #111; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    p { color: #444; line-height: 1.6; }
+    .hint { margin-top: 1.25rem; padding: 12px 16px; background: #f5f5f5; border-radius: 6px; font-size: 0.9rem; }
+    a { color: #0070f3; }
+  </style>
+</head>
+<body>
+  <h1>${opts.title}</h1>
+  <p>${opts.body}</p>
+  <div class="hint">${opts.hint}</div>
+  <p style="margin-top:2rem;font-size:0.8rem;color:#999">
+    <a href="https://leash.build/dashboard">Leash Dashboard</a> &middot;
+    <a href="https://leash.build/docs/sdk">Docs</a>
+  </p>
+</body>
+</html>`
 }

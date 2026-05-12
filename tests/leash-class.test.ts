@@ -696,3 +696,170 @@ describe('leash.auth.isAuthenticated() — server mode', () => {
     expect(leash.auth.isAuthenticated()).toBe(false)
   })
 })
+
+// ─── Leash.createDevAuthHandler ───────────────────────────────────────────────
+
+function makeGetRequest(url: string) {
+  return { url }
+}
+
+describe('Leash.createDevAuthHandler() — missing code', () => {
+  it('returns 400 HTML when no code param in URL', async () => {
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth'))
+    expect(res.status).toBe(400)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    const body = await res.text()
+    expect(body).toContain('Missing exchange code')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    delete process.env['LEASH_PLATFORM_URL']
+  })
+
+  it('returns 302 with Set-Cookie containing the token, HttpOnly and Path=/', async () => {
+    const fakeToken = 'fake.jwt.token'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: fakeToken }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc123'))
+
+    expect(res.status).toBe(302)
+    const setCookie = res.headers.get('set-cookie')
+    expect(setCookie).not.toBeNull()
+    expect(setCookie).toContain(`leash-auth=${fakeToken}`)
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toContain('Path=/')
+  })
+
+  it('redirects to / by default', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: 'tok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('location')).toBe('/')
+  })
+
+  it('respects custom redirectTo option', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: 'tok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler({ redirectTo: '/dashboard' })
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('location')).toBe('/dashboard')
+  })
+
+  it('includes SameSite=Lax in Set-Cookie', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: 'tok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('set-cookie')).toContain('SameSite=Lax')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — exchange error responses', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+    delete process.env['LEASH_PLATFORM_URL']
+  })
+
+  it('returns 410 HTML when platform returns 410 (code expired/used)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 410 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=used'))
+    expect(res.status).toBe(410)
+    const body = await res.text()
+    expect(body).toContain('expired')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('returns 404 HTML when platform returns 404 (unknown code)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 404 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=unknown'))
+    expect(res.status).toBe(404)
+    const body = await res.text()
+    expect(body).toContain('Unknown code')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('returns 500 HTML when platform returns other non-ok status', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 503 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=xyz'))
+    expect(res.status).toBe(500)
+    const body = await res.text()
+    expect(body).toContain('Authentication failed')
+  })
+})
+
+describe('Leash.createDevAuthHandler() — LEASH_PLATFORM_URL env var', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('window', undefined)
+  })
+
+  it('POSTs to LEASH_PLATFORM_URL when set', async () => {
+    process.env['LEASH_PLATFORM_URL'] = 'https://staging.leash.build'
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: 'tok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    try {
+      const handler = Leash.createDevAuthHandler()
+      await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('https://staging.leash.build'),
+        expect.anything()
+      )
+    } finally {
+      delete process.env['LEASH_PLATFORM_URL']
+    }
+  })
+
+  it('POSTs to https://leash.build by default (no env var)', async () => {
+    delete process.env['LEASH_PLATFORM_URL']
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ token: 'tok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('https://leash.build'),
+      expect.anything()
+    )
+  })
+})
