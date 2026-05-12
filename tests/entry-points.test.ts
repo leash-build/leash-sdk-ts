@@ -28,6 +28,10 @@ describe('dist output exists', () => {
     'integrations/client.js',
     'integrations/react.js',
     'integrations/mcp.js',
+    'leash.js',
+    'leash.d.ts',
+    'errors.js',
+    'errors.d.ts',
     'client/index.js',
     'client/hooks/index.js',
     'client/context/LeashProvider.js',
@@ -115,6 +119,26 @@ describe('@leash/sdk/integrations does NOT import React', () => {
   })
 })
 
+describe('@leash/sdk/leash does NOT import React or Next.js (0.4 unified client)', () => {
+  it('leash.js has no react import', () => {
+    const content = readFileSync(join(DIST, 'leash.js'), 'utf-8')
+    expect(content).not.toMatch(/from ['"]react['"]/)
+    expect(content).not.toMatch(/require\(['"]react['"]\)/)
+  })
+
+  it('leash.js has no next import', () => {
+    const content = readFileSync(join(DIST, 'leash.js'), 'utf-8')
+    expect(content).not.toMatch(/from ['"]next/)
+    expect(content).not.toMatch(/require\(['"]next/)
+  })
+
+  it('errors.js has no react or next import', () => {
+    const content = readFileSync(join(DIST, 'errors.js'), 'utf-8')
+    expect(content).not.toMatch(/from ['"]react['"]/)
+    expect(content).not.toMatch(/from ['"]next/)
+  })
+})
+
 describe('@leash/sdk/integrations/react DOES import React (expected)', () => {
   it('integrations/react.js re-exports hooks', () => {
     const content = readFileSync(join(DIST, 'integrations/react.js'), 'utf-8')
@@ -168,6 +192,11 @@ describe('package.json exports are correct', () => {
 
   it('has ./integrations/mcp entry point', () => {
     expect(exports['./integrations/mcp']).toBeDefined()
+  })
+
+  it('has ./leash entry point (0.4 unified client, framework-agnostic)', () => {
+    expect(exports['./leash']).toBeDefined()
+    expect(exports['./leash'].default).toBe('./dist/leash.js')
   })
 
   it('react and next are optional peer deps', () => {

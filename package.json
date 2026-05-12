@@ -29,6 +29,10 @@
     "./integrations/mcp": {
       "types": "./dist/integrations/mcp.d.ts",
       "default": "./dist/integrations/mcp.js"
+    },
+    "./leash": {
+      "types": "./dist/leash.d.ts",
+      "default": "./dist/leash.js"
     }
   },
   "scripts": {

@@ -81,6 +81,10 @@ describe('import in clean environment (no React, no Next.js)', () => {
   it('@leash/sdk/integrations/mcp works without react or next', () => {
     testImportInCleanEnv('@leash/sdk/integrations/mcp')
   }, 60000)
+
+  it('@leash/sdk/leash works without react or next (0.4 unified client)', () => {
+    testImportInCleanEnv('@leash/sdk/leash')
+  }, 60000)
 })
 
 describe('import with React but no Next.js', () => {
