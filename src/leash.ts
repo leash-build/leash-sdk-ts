@@ -203,7 +203,7 @@ export class Leash {
       },
       linear: {
         listIssues: async (filter?: LinearListIssuesFilter): Promise<LinearListIssuesResult> => {
-          const raw = (await this._call('linear', 'list-issues', filter ?? {})) as
+          const raw = (await this._call('linear', 'list_issues', filter ?? {})) as
             | { issues?: LinearIssue[]; cursor?: string }
             | LinearIssue[]
             | null
@@ -215,15 +215,15 @@ export class Leash {
           }
         },
         getIssue: (id: string) =>
-          this._call('linear', 'get-issue', { id }) as Promise<LinearIssue>,
+          this._call('linear', 'get_issue', { id }) as Promise<LinearIssue>,
         createIssue: (input: LinearCreateIssueInput) =>
-          this._call('linear', 'create-issue', input) as Promise<LinearIssue>,
+          this._call('linear', 'create_issue', input) as Promise<LinearIssue>,
         updateIssue: (id: string, patch: LinearUpdateIssuePatch) =>
-          this._call('linear', 'update-issue', { id, ...patch }) as Promise<LinearIssue>,
+          this._call('linear', 'update_issue', { id, ...patch }) as Promise<LinearIssue>,
         addComment: (issueId: string, body: string) =>
-          this._call('linear', 'add-comment', { issueId, body }) as Promise<LinearComment>,
+          this._call('linear', 'add_comment', { issueId, body }) as Promise<LinearComment>,
         listTeams: async (): Promise<LinearTeam[]> => {
-          const raw = (await this._call('linear', 'list-teams', {})) as
+          const raw = (await this._call('linear', 'list_teams', {})) as
             | { teams?: LinearTeam[] }
             | LinearTeam[]
             | null
@@ -232,7 +232,7 @@ export class Leash {
           return raw?.teams ?? []
         },
         listProjects: async (filter?: LinearListProjectsFilter): Promise<LinearProject[]> => {
-          const raw = (await this._call('linear', 'list-projects', filter ?? {})) as
+          const raw = (await this._call('linear', 'list_projects', filter ?? {})) as
             | { projects?: LinearProject[] }
             | LinearProject[]
             | null
