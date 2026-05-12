@@ -16,3 +16,23 @@ export type {
   DriveFile, DriveFileList,
   CalendarListEntry, CalendarList, CalendarEvent, CalendarEventList,
 } from './types.js'
+
+// Provider types — Linear (LEA-180)
+export type {
+  LinearIssue,
+  LinearComment,
+  LinearTeam,
+  LinearProject,
+  LinearStateType,
+  LinearPriority,
+  LinearProjectState,
+  LinearUserRef,
+  LinearStateRef,
+  LinearTeamRef,
+  LinearListIssuesFilter,
+  LinearListIssuesResult,
+  LinearCreateIssueInput,
+  LinearUpdateIssuePatch,
+  LinearListProjectsFilter,
+  LeashLinearNamespace,
+} from './providers/linear.js'
