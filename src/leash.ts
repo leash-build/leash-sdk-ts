@@ -203,7 +203,7 @@ export class Leash {
       },
       linear: {
         listIssues: async (filter?: LinearListIssuesFilter): Promise<LinearListIssuesResult> => {
-          const raw = (await this._callMcp('linear', 'list-issues', filter ?? {})) as
+          const raw = (await this._call('linear', 'list-issues', filter ?? {})) as
             | { issues?: LinearIssue[]; cursor?: string }
             | LinearIssue[]
             | null
@@ -215,15 +215,15 @@ export class Leash {
           }
         },
         getIssue: (id: string) =>
-          this._callMcp('linear', 'get-issue', { id }) as Promise<LinearIssue>,
+          this._call('linear', 'get-issue', { id }) as Promise<LinearIssue>,
         createIssue: (input: LinearCreateIssueInput) =>
-          this._callMcp('linear', 'create-issue', input) as Promise<LinearIssue>,
+          this._call('linear', 'create-issue', input) as Promise<LinearIssue>,
         updateIssue: (id: string, patch: LinearUpdateIssuePatch) =>
-          this._callMcp('linear', 'update-issue', { id, ...patch }) as Promise<LinearIssue>,
+          this._call('linear', 'update-issue', { id, ...patch }) as Promise<LinearIssue>,
         addComment: (issueId: string, body: string) =>
-          this._callMcp('linear', 'add-comment', { issueId, body }) as Promise<LinearComment>,
+          this._call('linear', 'add-comment', { issueId, body }) as Promise<LinearComment>,
         listTeams: async (): Promise<LinearTeam[]> => {
-          const raw = (await this._callMcp('linear', 'list-teams', {})) as
+          const raw = (await this._call('linear', 'list-teams', {})) as
             | { teams?: LinearTeam[] }
             | LinearTeam[]
             | null
@@ -232,7 +232,7 @@ export class Leash {
           return raw?.teams ?? []
         },
         listProjects: async (filter?: LinearListProjectsFilter): Promise<LinearProject[]> => {
-          const raw = (await this._callMcp('linear', 'list-projects', filter ?? {})) as
+          const raw = (await this._call('linear', 'list-projects', filter ?? {})) as
             | { projects?: LinearProject[] }
             | LinearProject[]
             | null
@@ -419,19 +419,6 @@ export class Leash {
   private async _call(provider: string, action: string, params?: unknown): Promise<unknown> {
     return this._post(
       `${this.platformUrl}/api/integrations/${provider}/${action}`,
-      params,
-      { docsUrl: `https://leash.build/docs/integrations/${provider}` },
-    )
-  }
-
-  /**
-   * MCP-proxy call path used by typed namespaces that delegate to upstream
-   * MCP servers (e.g. Linear). The platform routes these through
-   * `/api/integrations/mcp/<provider>/<method>` — see LEA-180.
-   */
-  private async _callMcp(provider: string, action: string, params?: unknown): Promise<unknown> {
-    return this._post(
-      `${this.platformUrl}/api/integrations/mcp/${provider}/${action}`,
       params,
       { docsUrl: `https://leash.build/docs/integrations/${provider}` },
     )

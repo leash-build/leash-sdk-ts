@@ -57,7 +57,7 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     delete process.env['LEASH_PLATFORM_URL']
   })
 
-  it('listIssues POSTs to /api/integrations/mcp/linear/list-issues with the filter in body and platform headers', async () => {
+  it('listIssues POSTs to /api/integrations/linear/list-issues with the filter in body and platform headers', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { issues: [], cursor: undefined } })
     )
@@ -69,7 +69,7 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     await leash.integrations.linear.listIssues({ teamId: 'team-1', limit: 25 })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/list-issues',
+      'https://leash.build/api/integrations/linear/list-issues',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -93,19 +93,19 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.listIssues()
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/list-issues',
+      'https://leash.build/api/integrations/linear/list-issues',
       expect.objectContaining({ body: JSON.stringify({}) })
     )
   })
 
-  it('getIssue POSTs to /api/integrations/mcp/linear/get-issue with { id }', async () => {
+  it('getIssue POSTs to /api/integrations/linear/get-issue with { id }', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { id: 'iss-1', identifier: 'LEA-1', title: 'x' } })
     )
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.getIssue('LEA-1')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/get-issue',
+      'https://leash.build/api/integrations/linear/get-issue',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ id: 'LEA-1' }),
@@ -113,7 +113,7 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     )
   })
 
-  it('createIssue POSTs to /api/integrations/mcp/linear/create-issue with the input body', async () => {
+  it('createIssue POSTs to /api/integrations/linear/create-issue with the input body', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { id: 'iss-1', identifier: 'LEA-2', title: 'New' } })
     )
@@ -121,19 +121,19 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     const input = { teamId: 'team-1', title: 'New', description: 'd', priority: 2 as const }
     await leash.integrations.linear.createIssue(input)
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/create-issue',
+      'https://leash.build/api/integrations/linear/create-issue',
       expect.objectContaining({ method: 'POST', body: JSON.stringify(input) })
     )
   })
 
-  it('updateIssue POSTs to /api/integrations/mcp/linear/update-issue with { id, ...patch }', async () => {
+  it('updateIssue POSTs to /api/integrations/linear/update-issue with { id, ...patch }', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { id: 'iss-1', identifier: 'LEA-2', title: 'Updated' } })
     )
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.updateIssue('iss-1', { title: 'Updated', priority: 1 as const })
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/update-issue',
+      'https://leash.build/api/integrations/linear/update-issue',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ id: 'iss-1', title: 'Updated', priority: 1 }),
@@ -141,14 +141,14 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     )
   })
 
-  it('addComment POSTs to /api/integrations/mcp/linear/add-comment with { issueId, body }', async () => {
+  it('addComment POSTs to /api/integrations/linear/add-comment with { issueId, body }', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { id: 'cmt-1', body: 'Hello', issueId: 'iss-1' } })
     )
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.addComment('iss-1', 'Hello')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/add-comment',
+      'https://leash.build/api/integrations/linear/add-comment',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ issueId: 'iss-1', body: 'Hello' }),
@@ -156,26 +156,26 @@ describe('Leash.integrations.linear — wire path and headers', () => {
     )
   })
 
-  it('listTeams POSTs to /api/integrations/mcp/linear/list-teams with empty body', async () => {
+  it('listTeams POSTs to /api/integrations/linear/list-teams with empty body', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { teams: [] } })
     )
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.listTeams()
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/list-teams',
+      'https://leash.build/api/integrations/linear/list-teams',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({}) })
     )
   })
 
-  it('listProjects POSTs to /api/integrations/mcp/linear/list-projects with optional teamId filter', async () => {
+  it('listProjects POSTs to /api/integrations/linear/list-projects with optional teamId filter', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ data: { projects: [] } })
     )
     const leash = new Leash({ request: makeRequest('t'), platformUrl: 'https://leash.build' })
     await leash.integrations.linear.listProjects({ teamId: 'team-2' })
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://leash.build/api/integrations/mcp/linear/list-projects',
+      'https://leash.build/api/integrations/linear/list-projects',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ teamId: 'team-2' }) })
     )
   })
