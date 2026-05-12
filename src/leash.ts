@@ -291,13 +291,32 @@ export class Leash {
         )
       }
 
+      // Platform contract: { success: true, data: { token, expires_at } }
+      // leash-platform/src/app/api/auth/exchange-code/route.ts lines 158–164
       let token: string
+      let resolvedMaxAge: number = cookieMaxAge
       try {
-        const data = await exchangeRes.json() as Record<string, unknown>
-        if (typeof data['token'] !== 'string') {
+        const json = await exchangeRes.json() as Record<string, unknown>
+
+        if (json['success'] !== true) {
+          throw new Error(
+            typeof json['error'] === 'string' ? json['error'] : 'Exchange failed'
+          )
+        }
+
+        const payload = json['data'] as Record<string, unknown> | undefined
+        if (!payload || typeof payload['token'] !== 'string') {
           throw new Error('No token in response')
         }
-        token = data['token']
+
+        token = payload['token']
+        const expiresAt = typeof payload['expires_at'] === 'string'
+          ? payload['expires_at']
+          : undefined
+        if (expiresAt) {
+          const ms = new Date(expiresAt).getTime() - Date.now()
+          resolvedMaxAge = Math.max(0, Math.floor(ms / 1000))
+        }
       } catch {
         return new Response(
           _devAuthErrorPage({
@@ -309,7 +328,7 @@ export class Leash {
         )
       }
 
-      const cookieValue = `${cookieName}=${token}; HttpOnly; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax`
+      const cookieValue = `${cookieName}=${token}; HttpOnly; Path=/; Max-Age=${resolvedMaxAge}; SameSite=Lax`
 
       return new Response(null, {
         status: 302,

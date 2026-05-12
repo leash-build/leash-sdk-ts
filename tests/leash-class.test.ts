@@ -715,6 +715,10 @@ describe('Leash.createDevAuthHandler() — missing code', () => {
 })
 
 describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.stubGlobal('window', undefined)
@@ -724,7 +728,10 @@ describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () 
   it('returns 302 with Set-Cookie containing the token, HttpOnly and Path=/', async () => {
     const fakeToken = 'fake.jwt.token'
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: fakeToken }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: fakeToken, expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -743,7 +750,10 @@ describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () 
 
   it('redirects to / by default', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'tok' }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -755,7 +765,10 @@ describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () 
 
   it('respects custom redirectTo option', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'tok' }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -767,7 +780,10 @@ describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () 
 
   it('includes SameSite=Lax in Set-Cookie', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'tok' }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -822,6 +838,10 @@ describe('Leash.createDevAuthHandler() — exchange error responses', () => {
 })
 
 describe('Leash.createDevAuthHandler() — LEASH_PLATFORM_URL env var', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.stubGlobal('window', undefined)
@@ -830,7 +850,10 @@ describe('Leash.createDevAuthHandler() — LEASH_PLATFORM_URL env var', () => {
   it('POSTs to LEASH_PLATFORM_URL when set', async () => {
     process.env['LEASH_PLATFORM_URL'] = 'https://staging.leash.build'
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'tok' }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -850,7 +873,10 @@ describe('Leash.createDevAuthHandler() — LEASH_PLATFORM_URL env var', () => {
   it('POSTs to https://leash.build by default (no env var)', async () => {
     delete process.env['LEASH_PLATFORM_URL']
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ token: 'tok' }), {
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
