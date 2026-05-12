@@ -2,6 +2,18 @@ import { LeashError } from './errors.js'
 import { getLeashUser } from './server/auth.js'
 import type { LeashUser } from './types.js'
 import type { GmailMessageList, GmailLabelList, CalendarList, CalendarEventList, CalendarEvent, DriveFile, DriveFileList } from './integrations/types.js'
+import type {
+  LeashLinearNamespace,
+  LinearIssue,
+  LinearComment,
+  LinearTeam,
+  LinearProject,
+  LinearListIssuesFilter,
+  LinearListIssuesResult,
+  LinearCreateIssueInput,
+  LinearUpdateIssuePatch,
+  LinearListProjectsFilter,
+} from './integrations/providers/linear.js'
 
 const DEFAULT_PLATFORM_URL = 'https://leash.build'
 
@@ -73,6 +85,7 @@ export class Leash {
       deleteFile(fileId: string): Promise<unknown>
       searchFiles(query: string, maxResults?: number): Promise<DriveFileList>
     }
+    linear: LeashLinearNamespace
   }
 
   constructor(opts: LeashOptions = {}) {
@@ -187,6 +200,46 @@ export class Leash {
           this._call('google_drive', 'delete-file', { fileId }),
         searchFiles: (query: string, maxResults?: number) =>
           this._call('google_drive', 'search-files', { query, maxResults }) as Promise<DriveFileList>,
+      },
+      linear: {
+        listIssues: async (filter?: LinearListIssuesFilter): Promise<LinearListIssuesResult> => {
+          const raw = (await this._callMcp('linear', 'list-issues', filter ?? {})) as
+            | { issues?: LinearIssue[]; cursor?: string }
+            | LinearIssue[]
+            | null
+            | undefined
+          if (Array.isArray(raw)) return { issues: raw }
+          return {
+            issues: raw?.issues ?? [],
+            ...(raw?.cursor !== undefined ? { cursor: raw.cursor } : {}),
+          }
+        },
+        getIssue: (id: string) =>
+          this._callMcp('linear', 'get-issue', { id }) as Promise<LinearIssue>,
+        createIssue: (input: LinearCreateIssueInput) =>
+          this._callMcp('linear', 'create-issue', input) as Promise<LinearIssue>,
+        updateIssue: (id: string, patch: LinearUpdateIssuePatch) =>
+          this._callMcp('linear', 'update-issue', { id, ...patch }) as Promise<LinearIssue>,
+        addComment: (issueId: string, body: string) =>
+          this._callMcp('linear', 'add-comment', { issueId, body }) as Promise<LinearComment>,
+        listTeams: async (): Promise<LinearTeam[]> => {
+          const raw = (await this._callMcp('linear', 'list-teams', {})) as
+            | { teams?: LinearTeam[] }
+            | LinearTeam[]
+            | null
+            | undefined
+          if (Array.isArray(raw)) return raw
+          return raw?.teams ?? []
+        },
+        listProjects: async (filter?: LinearListProjectsFilter): Promise<LinearProject[]> => {
+          const raw = (await this._callMcp('linear', 'list-projects', filter ?? {})) as
+            | { projects?: LinearProject[] }
+            | LinearProject[]
+            | null
+            | undefined
+          if (Array.isArray(raw)) return raw
+          return raw?.projects ?? []
+        },
       },
     }
   }
@@ -364,6 +417,27 @@ export class Leash {
   }
 
   private async _call(provider: string, action: string, params?: unknown): Promise<unknown> {
+    return this._post(
+      `${this.platformUrl}/api/integrations/${provider}/${action}`,
+      params,
+      { docsUrl: `https://leash.build/docs/integrations/${provider}` },
+    )
+  }
+
+  /**
+   * MCP-proxy call path used by typed namespaces that delegate to upstream
+   * MCP servers (e.g. Linear). The platform routes these through
+   * `/api/integrations/mcp/<provider>/<method>` — see LEA-180.
+   */
+  private async _callMcp(provider: string, action: string, params?: unknown): Promise<unknown> {
+    return this._post(
+      `${this.platformUrl}/api/integrations/mcp/${provider}/${action}`,
+      params,
+      { docsUrl: `https://leash.build/docs/integrations/${provider}` },
+    )
+  }
+
+  private async _post(url: string, params: unknown, opts: { docsUrl: string }): Promise<unknown> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -380,12 +454,22 @@ export class Leash {
       headers['Cookie'] = `leash-auth=${this.cookieValue}`
     }
 
-    const res = await fetch(`${this.platformUrl}/api/integrations/${provider}/${action}`, {
-      method: 'POST',
-      headers,
-      credentials: 'same-origin',
-      body: JSON.stringify(params ?? {}),
-    })
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        credentials: 'same-origin',
+        body: JSON.stringify(params ?? {}),
+      })
+    } catch (e) {
+      throw new LeashError({
+        code: 'NETWORK_ERROR',
+        message: e instanceof Error ? e.message : 'Failed to reach Leash platform',
+        action: 'Check your network connection and that the Leash platform is reachable.',
+        seeAlso: 'https://leash.build/docs/sdk',
+      })
+    }
 
     if (!res.ok) {
       let errorMessage = `HTTP ${res.status}`
@@ -419,8 +503,8 @@ export class Leash {
       throw new LeashError({
         code: 'INTEGRATION_ERROR',
         message: errorMessage,
-        action: 'Check the Leash platform status and your integration configuration.',
-        seeAlso: 'https://leash.build/docs/integrations/gmail',
+        action: 'Check your integration configuration and try again — the upstream provider returned an error.',
+        seeAlso: opts.docsUrl,
       })
     }
 
