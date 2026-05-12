@@ -792,9 +792,50 @@ describe('Leash.createDevAuthHandler() — valid code → 302 + Set-Cookie', () 
     const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
     expect(res.headers.get('set-cookie')).toContain('SameSite=Lax')
   })
+
+  it('derives Max-Age from platform expires_at', async () => {
+    const futureMs = Date.now() + 4 * 60 * 60 * 1000 // 4 hours from now
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok', expires_at: new Date(futureMs).toISOString() },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    const setCookie = res.headers.get('set-cookie')
+    // Max-Age should be approximately 4 hours in seconds (within a few seconds of 14400)
+    const match = setCookie?.match(/Max-Age=(\d+)/)
+    expect(match).not.toBeNull()
+    const maxAge = parseInt(match![1], 10)
+    expect(maxAge).toBeGreaterThan(4 * 60 * 60 - 5)
+    expect(maxAge).toBeLessThanOrEqual(4 * 60 * 60)
+  })
+
+  it('falls back to cookieMaxAge constant when expires_at is absent', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        data: { token: 'tok' },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const handler = Leash.createDevAuthHandler({ cookieMaxAge: 3600 })
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=abc'))
+    expect(res.headers.get('set-cookie')).toContain('Max-Age=3600')
+  })
 })
 
 describe('Leash.createDevAuthHandler() — exchange error responses', () => {
+  // Platform contract: these mocks must match the response shape from
+  //   leash-platform/src/app/api/auth/exchange-code/route.ts
+  // If the platform changes the envelope, update these mocks AND consider
+  // adding an integration test against staging.
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.stubGlobal('window', undefined)
@@ -803,7 +844,7 @@ describe('Leash.createDevAuthHandler() — exchange error responses', () => {
 
   it('returns 410 HTML when platform returns 410 (code expired/used)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('', { status: 410 })
+      new Response(JSON.stringify({ success: false, error: 'Code expired or already redeemed' }), { status: 410 })
     )
     const handler = Leash.createDevAuthHandler()
     const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=used'))
@@ -815,7 +856,7 @@ describe('Leash.createDevAuthHandler() — exchange error responses', () => {
 
   it('returns 404 HTML when platform returns 404 (unknown code)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('', { status: 404 })
+      new Response(JSON.stringify({ success: false, error: 'Unknown code' }), { status: 404 })
     )
     const handler = Leash.createDevAuthHandler()
     const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=unknown'))
@@ -825,15 +866,36 @@ describe('Leash.createDevAuthHandler() — exchange error responses', () => {
     expect(res.headers.get('content-type')).toContain('text/html')
   })
 
-  it('returns 500 HTML when platform returns other non-ok status', async () => {
+  it('returns 500 HTML when platform returns 5xx status', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('', { status: 503 })
+      new Response(JSON.stringify({ success: false, error: 'Internal error' }), { status: 503 })
     )
     const handler = Leash.createDevAuthHandler()
     const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=xyz'))
     expect(res.status).toBe(500)
     const body = await res.text()
     expect(body).toContain('Authentication failed')
+  })
+
+  it('passes through 4xx status codes verbatim for unexpected errors', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'Invalid JSON body' }), { status: 400 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=xyz'))
+    expect(res.status).toBe(400)
+    const body = await res.text()
+    expect(body).toContain('Authentication failed')
+  })
+
+  it('includes platform error message as secondary note in error page', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'User context no longer valid' }), { status: 410 })
+    )
+    const handler = Leash.createDevAuthHandler()
+    const res = await handler(makeGetRequest('http://localhost:3000/api/_leash/dev-auth?code=used'))
+    const body = await res.text()
+    expect(body).toContain('User context no longer valid')
   })
 })
 

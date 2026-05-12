@@ -259,10 +259,18 @@ export class Leash {
       }
 
       if (exchangeRes.status === 410) {
+        // Platform contract: { success: false, error: "..." }
+        // leash-platform/src/app/api/auth/exchange-code/route.ts lines 82–85, 98–101
+        let platformReason: string | undefined
+        try {
+          const errJson = await exchangeRes.clone().json() as Record<string, unknown>
+          if (typeof errJson['error'] === 'string') platformReason = errJson['error']
+        } catch { /* ignore parse failures */ }
         return new Response(
           _devAuthErrorPage({
             title: 'Code expired or already used',
-            body: 'This exchange code has expired or was already used.',
+            body: 'This exchange code has expired or was already used.' +
+              (platformReason ? `<br><small>${_escapeHtml(platformReason)}</small>` : ''),
             hint: 'Click <strong>Open in local dev</strong> from the Leash dashboard to get a fresh code.',
           }),
           { status: 410, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
@@ -270,10 +278,17 @@ export class Leash {
       }
 
       if (exchangeRes.status === 404) {
+        // Platform contract: { success: false, error: "Unknown code" }
+        let platformReason: string | undefined
+        try {
+          const errJson = await exchangeRes.clone().json() as Record<string, unknown>
+          if (typeof errJson['error'] === 'string') platformReason = errJson['error']
+        } catch { /* ignore parse failures */ }
         return new Response(
           _devAuthErrorPage({
             title: 'Unknown code',
-            body: 'The exchange code was not recognised by the Leash platform.',
+            body: 'The exchange code was not recognised by the Leash platform.' +
+              (platformReason ? `<br><small>${_escapeHtml(platformReason)}</small>` : ''),
             hint: 'Click <strong>Open in local dev</strong> from the Leash dashboard to get a valid code.',
           }),
           { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
@@ -281,13 +296,21 @@ export class Leash {
       }
 
       if (!exchangeRes.ok) {
+        // Pass through 4xx codes verbatim; collapse unexpected 5xx to SDK 500.
+        const status = exchangeRes.status >= 400 && exchangeRes.status < 500 ? exchangeRes.status : 500
+        let platformReason: string | undefined
+        try {
+          const errJson = await exchangeRes.clone().json() as Record<string, unknown>
+          if (typeof errJson['error'] === 'string') platformReason = errJson['error']
+        } catch { /* ignore parse failures */ }
         return new Response(
           _devAuthErrorPage({
             title: 'Authentication failed',
-            body: 'The Leash platform returned an unexpected error.',
+            body: 'The Leash platform returned an unexpected error.' +
+              (platformReason ? `<br><small>${_escapeHtml(platformReason)}</small>` : ''),
             hint: 'Try again or contact support if the issue persists.',
           }),
-          { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
         )
       }
 
@@ -449,6 +472,15 @@ export function _extractCookie(req: any, name: string): string | undefined {
   }
 
   return undefined
+}
+
+function _escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 /**
