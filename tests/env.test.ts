@@ -218,7 +218,7 @@ describe('leash.env.get — error handling', () => {
     delete process.env['LEASH_PLATFORM_URL']
   })
 
-  it('401 → throws LeashError code=UNAUTHORIZED with action mentioning api-keys page', async () => {
+  it('401 → throws LeashError code=UNAUTHORIZED with action pointing at the org dashboard', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResp({ error: 'Missing Bearer token' }, 401)
     )
@@ -227,7 +227,21 @@ describe('leash.env.get — error handling', () => {
     await expect(leash.env.get('FOO')).rejects.toEqual(
       expect.objectContaining<Partial<LeashError>>({
         code: 'UNAUTHORIZED',
-        action: expect.stringContaining('api-keys'),
+        action: expect.stringContaining('/dashboard/organization'),
+      })
+    )
+  })
+
+  it('400 → throws LeashError code=INVALID_KEY for developer input errors', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResp({ error: 'Invalid key' }, 400)
+    )
+
+    const leash = new Leash({ request: makeRequest(), platformUrl: 'https://leash.build' })
+    await expect(leash.env.get('123BAD')).rejects.toEqual(
+      expect.objectContaining<Partial<LeashError>>({
+        code: 'INVALID_KEY',
+        action: expect.stringContaining('[A-Za-z_]'),
       })
     )
   })

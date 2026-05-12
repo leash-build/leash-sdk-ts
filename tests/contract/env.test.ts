@@ -140,6 +140,6 @@ describe.skipIf(!RUN_CONTRACT)('leash.env.get ↔ platform contract (live)', () 
     }
 
     expect(caughtErr?.code).toBe('UNAUTHORIZED')
-    expect(caughtErr?.action).toContain('api-keys')
+    expect(caughtErr?.action).toContain('/dashboard/organization')
   })
 })

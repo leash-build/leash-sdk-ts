@@ -9,6 +9,7 @@ export type LeashErrorCode =
   | 'NETWORK_ERROR'
   | 'UPGRADE_REQUIRED'
   | 'KEY_NOT_DECLARED'
+  | 'INVALID_KEY'
   | 'SOURCE_RESYNC_FAILED'
   | 'ENV_FETCH_ERROR'
 

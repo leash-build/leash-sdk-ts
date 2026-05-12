@@ -304,13 +304,28 @@ export class Leash {
       },
     })
 
+    if (res.status === 400) {
+      // Platform validates env-var keys against /^[A-Za-z_][A-Za-z0-9_]*$/.
+      // Non-conforming keys get rejected here as developer-input errors,
+      // distinct from "key not declared" (404) or "key not found in any
+      // source" (also 404). Surface a specific error rather than folding
+      // into ENV_FETCH_ERROR.
+      throw new LeashError({
+        code: 'INVALID_KEY',
+        message: `Invalid env-var key: '${key}'.`,
+        action:
+          "Env-var names must match /^[A-Za-z_][A-Za-z0-9_]*$/ (letters, digits, underscore; can't start with a digit) and be no longer than 100 characters.",
+        seeAlso: 'https://leash.build/docs/sdk',
+      })
+    }
+
     if (res.status === 401) {
       throw new LeashError({
         code: 'UNAUTHORIZED',
         message: 'Missing or invalid LEASH_API_KEY.',
         action:
-          'Your LEASH_API_KEY is missing or invalid. Mint a new one at /dashboard/organization/api-keys.',
-        seeAlso: 'https://leash.build/dashboard/organization/api-keys',
+          'Your LEASH_API_KEY is missing or invalid. Mint a new one at /dashboard/organization.',
+        seeAlso: 'https://leash.build/dashboard/organization',
       })
     }
 
