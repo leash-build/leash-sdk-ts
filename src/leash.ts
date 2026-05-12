@@ -55,7 +55,7 @@ export class Leash {
     isAuthenticated(): boolean
     /**
      * Returns a request handler (req) => Promise<Response> that implements the
-     * LEA-186 local-dev cookie-exchange flow. Mount at /api/_leash/dev-auth.
+     * LEA-186 local-dev cookie-exchange flow. Mount at /api/leash/dev-auth.
      * Thin instance wrapper around Leash.createDevAuthHandler().
      */
     attachLocalDevHandler(opts?: DevAuthHandlerOptions): (req: unknown) => Promise<Response>
@@ -246,11 +246,11 @@ export class Leash {
 
   /**
    * Returns a Next.js-style route handler that implements the LEA-186
-   * local-dev cookie-exchange flow. Mount at /api/_leash/dev-auth.
+   * local-dev cookie-exchange flow. Mount at /api/leash/dev-auth.
    *
    * @example
    * ```ts
-   * // src/app/api/_leash/dev-auth/route.ts
+   * // src/app/api/leash/dev-auth/route.ts
    * import { Leash } from '@leash/sdk/leash'
    * export const GET = Leash.createDevAuthHandler()
    * ```
