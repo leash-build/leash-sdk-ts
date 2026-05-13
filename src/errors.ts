@@ -5,6 +5,7 @@ export type LeashErrorCode =
   | 'UNAUTHORIZED'
   | 'INTEGRATION_NOT_ENABLED'
   | 'INTEGRATION_ERROR'
+  | 'UPGRADE_REQUIRED'
   | 'NETWORK_ERROR'
 
 export interface LeashErrorOptions {
