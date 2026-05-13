@@ -460,9 +460,10 @@ export class Leash {
 
     if (!res.ok) {
       let errorMessage = `HTTP ${res.status}`
+      let errBody: Record<string, unknown> | undefined
       try {
-        const data = await res.json() as Record<string, unknown>
-        if (typeof data.error === 'string') errorMessage = data.error
+        errBody = await res.json() as Record<string, unknown>
+        if (typeof errBody['error'] === 'string') errorMessage = errBody['error'] as string
       } catch {
         // ignore parse errors
       }
@@ -474,6 +475,22 @@ export class Leash {
           action:
             'Ensure the leash-auth cookie is present, or open your app in local dev via the Leash dashboard to get a valid session.',
           seeAlso: 'https://leash.build/docs/sdk',
+        })
+      }
+
+      // Platform contract: 402 carries { error: 'upgrade_required', message, requiredPlan }
+      // for non-Google integration calls made by Starter users.
+      // See leash-platform PR #131.
+      if (res.status === 402) {
+        const upgradeMsg =
+          typeof errBody?.['message'] === 'string'
+            ? (errBody['message'] as string)
+            : 'This feature requires a higher plan.'
+        throw new LeashError({
+          code: 'UPGRADE_REQUIRED',
+          message: upgradeMsg,
+          action: 'Upgrade your plan at https://leash.build/dashboard/billing',
+          seeAlso: 'https://leash.build/pricing',
         })
       }
 

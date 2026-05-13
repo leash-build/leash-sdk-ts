@@ -208,6 +208,57 @@ describe('Leash.integrations.gmail — server mode fetch calls', () => {
     )
   })
 
+  it('listMessages — 402 response throws LeashError UPGRADE_REQUIRED with platform message and pricing seeAlso', async () => {
+    // Platform contract: leash-platform PR #131 returns 402 with
+    //   { error: 'upgrade_required', message, requiredPlan }
+    // for non-Google integration calls by Starter users. The SDK must surface
+    // this as UPGRADE_REQUIRED (not the generic INTEGRATION_ERROR), so callers
+    // can branch on the code and prompt the upgrade flow.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'upgrade_required',
+          message: 'Linear integration requires the Pro plan.',
+          requiredPlan: 'pro',
+        }),
+        {
+          status: 402,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    )
+
+    const leash = new Leash({ request: makeRequest('tok') })
+
+    await expect(leash.integrations.linear.listTeams()).rejects.toEqual(
+      expect.objectContaining<Partial<LeashError>>({
+        code: 'UPGRADE_REQUIRED',
+        message: 'Linear integration requires the Pro plan.',
+        action: expect.stringContaining('https://leash.build/dashboard/billing'),
+        seeAlso: 'https://leash.build/pricing',
+      })
+    )
+  })
+
+  it('listMessages — 402 without message body falls back to default copy', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'upgrade_required' }), {
+        status: 402,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    const leash = new Leash({ request: makeRequest('tok') })
+
+    await expect(leash.integrations.gmail.listMessages()).rejects.toEqual(
+      expect.objectContaining<Partial<LeashError>>({
+        code: 'UPGRADE_REQUIRED',
+        message: 'This feature requires a higher plan.',
+        seeAlso: 'https://leash.build/pricing',
+      })
+    )
+  })
+
   it('listMessages — 403 response throws LeashError INTEGRATION_NOT_ENABLED mentioning /dashboard/integrations', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ error: 'Forbidden' }), {
