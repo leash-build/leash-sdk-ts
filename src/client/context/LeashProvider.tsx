@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { LeashContext } from './leashContext.js'
-import { LEASH_AUTH_COOKIE } from '../../constants.js'
+import { LEASH_AUTH_COOKIE, LEASH_PLATFORM_URL } from '../../constants.js'
 import type { LeashUser, LeashJWTPayload } from '../../types.js'
 import { payloadToUser } from '../../auth/payload.js'
 
@@ -45,6 +45,65 @@ function getCookie(name: string): string | null {
   return null
 }
 
+/**
+ * Resolve the Leash platform URL the same way the integrations client does:
+ *   LEASH_PLATFORM_URL env var → fallback to https://leash.build
+ *
+ * In Next.js client bundles, `process.env.LEASH_PLATFORM_URL` is inlined at
+ * build time (only when `NEXT_PUBLIC_…` is used) or stripped to undefined,
+ * so customers who want to point at a local platform can set
+ * `LEASH_PLATFORM_URL=http://localhost:3001` and the browser bundle will
+ * carry the override. Defensive `typeof process` guards keep this safe in
+ * pure-browser bundlers that don't shim `process`.
+ */
+function resolvePlatformUrl(): string {
+  if (typeof process !== 'undefined' && process.env && process.env.LEASH_PLATFORM_URL) {
+    return process.env.LEASH_PLATFORM_URL
+  }
+  return LEASH_PLATFORM_URL
+}
+
+/**
+ * Fetch the current user from the platform via /api/auth/me. Used when the
+ * `leash-auth` cookie is httpOnly (every production deployment today) and
+ * therefore not visible to `document.cookie`.
+ *
+ * Returns:
+ *   - LeashUser  → signed in
+ *   - null       → 401 unauthenticated (expected, not an error)
+ * Throws when the network call fails or the response is malformed; the
+ * caller decides whether to surface that to the UI.
+ */
+export async function fetchUserFromPlatform(
+  platformUrl: string = resolvePlatformUrl()
+): Promise<LeashUser | null> {
+  const res = await fetch(`${platformUrl}/api/auth/me`, {
+    credentials: 'include',
+  })
+
+  if (res.status === 401) {
+    return null
+  }
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch user: HTTP ${res.status}`)
+  }
+
+  const body = (await res.json()) as { user?: Partial<LeashUser> & Record<string, unknown> }
+
+  if (!body || !body.user || typeof body.user.id !== 'string') {
+    throw new Error('Malformed /api/auth/me response')
+  }
+
+  const u = body.user
+  return {
+    id: u.id as string,
+    email: (u.email as string) ?? '',
+    name: (u.name as string) ?? '',
+    picture: u.picture as string | undefined,
+  }
+}
+
 export function LeashProvider({ children }: LeashProviderProps) {
   const [user, setUser] = useState<LeashUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -57,29 +116,49 @@ export function LeashProvider({ children }: LeashProviderProps) {
       return
     }
 
-    try {
-      const token = getCookie(LEASH_AUTH_COOKIE)
+    let cancelled = false
 
-      if (!token) {
-        setUser(null)
-        setIsLoading(false)
-        return
+    const run = async () => {
+      // 1) Cookie-visible path — works for non-httpOnly cookies (local dev,
+      //    legacy setups). Cheap and synchronous; no network hop.
+      try {
+        const token = getCookie(LEASH_AUTH_COOKIE)
+        if (token) {
+          const payload = decodeJWT(token)
+          if (payload) {
+            if (cancelled) return
+            setUser(payloadToUser(payload))
+            setIsLoading(false)
+            return
+          }
+          // Token present but invalid/expired — fall through to the fetch
+          // path. The platform may have a fresh session via httpOnly cookie.
+        }
+      } catch {
+        // Cookie parse / JWT decode errors fall through to the fetch path.
       }
 
-      const payload = decodeJWT(token)
-
-      if (!payload) {
-        setUser(null)
-        setError(new Error('Invalid or expired token'))
+      // 2) Fetch fallback — production path. The browser ships the httpOnly
+      //    `leash-auth` cookie cross-origin because `credentials: 'include'`.
+      try {
+        const fetched = await fetchUserFromPlatform()
+        if (cancelled) return
+        setUser(fetched)
         setIsLoading(false)
-        return
+      } catch (err) {
+        if (cancelled) return
+        // Network error (offline, CORS, DNS, 5xx) — surface it so customers
+        // can render a retry UI. 401 is handled inside fetchUserFromPlatform
+        // and returns null without throwing.
+        setError(err instanceof Error ? err : new Error('Failed to authenticate'))
+        setIsLoading(false)
       }
+    }
 
-      setUser(payloadToUser(payload))
-      setIsLoading(false)
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to authenticate'))
-      setIsLoading(false)
+    void run()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 

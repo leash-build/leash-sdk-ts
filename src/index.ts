@@ -1,7 +1,13 @@
 // Main entry point - exports client-side functionality
 // For server-side, import from '@leash/sdk/server'
 
-export { useLeashAuth, useLeashEnv, LeashProvider, LeashContext } from './client/index.js'
+export {
+  useLeashAuth,
+  useLeashEnv,
+  useLeashRedirectToLogin,
+  LeashProvider,
+  LeashContext,
+} from './client/index.js'
 
 // Export types
 export type {
