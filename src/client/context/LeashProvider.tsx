@@ -25,8 +25,10 @@ function decodeJWT(token: string): LeashJWTPayload | null {
     }
 
     return decoded
-  } catch (error) {
-    console.error('Failed to decode JWT:', error)
+  } catch {
+    // Silent fail — invalid/malformed cookie isn't an actionable error for
+    // the user, and console.error noise gives observers an XSS signal. The
+    // fetch-fallback path will handle the "not signed in" state cleanly.
     return null
   }
 }
@@ -96,8 +98,11 @@ export async function fetchUserFromPlatform(
   }
 
   const u = body.user
+  // u.id already narrowed to string above; the other fields default to '' if
+  // missing because the platform may legitimately have null email/name on
+  // sparse user profiles (e.g. just-created Google OAuth user mid-flow).
   return {
-    id: u.id as string,
+    id: u.id,
     email: (u.email as string) ?? '',
     name: (u.name as string) ?? '',
     picture: u.picture as string | undefined,
