@@ -98,11 +98,12 @@ export async function fetchUserFromPlatform(
   }
 
   const u = body.user
-  // u.id already narrowed to string above; the other fields default to '' if
-  // missing because the platform may legitimately have null email/name on
-  // sparse user profiles (e.g. just-created Google OAuth user mid-flow).
+  // The narrowing on line 96 (typeof u.id !== 'string') doesn't propagate
+  // through the reassignment to `u`, so keep the explicit cast. Other fields
+  // default to '' because the platform may legitimately have null email/name
+  // on sparse user profiles (e.g. just-created Google OAuth user mid-flow).
   return {
-    id: u.id,
+    id: u.id as string,
     email: (u.email as string) ?? '',
     name: (u.name as string) ?? '',
     picture: u.picture as string | undefined,
